@@ -1,0 +1,175 @@
+'''
+Created on 02.11.2022
+
+@author: michael
+'''
+import io
+import os
+
+from PIL import Image
+from injector import singleton, inject
+from reportlab.lib.units import inch
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfgen.canvas import Canvas
+
+from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
+from Asb.ScanConvert2.PageGenerators import PAGE_GENERATORS
+from Asb.ScanConvert2.ScanConvertDomain import Project, Scantype, Algorithm, \
+    Projecttype
+
+
+INVISIBLE = 3
+
+@singleton
+class OCRService(object):
+    '''
+    This class performs ocr on the page image and adds the
+    words in an invisible font to the canvas.
+    '''
+    
+    @inject
+    def __init__(self, ocr_runner: OcrRunner):
+        
+        self.ocr_runner = ocr_runner
+    
+    def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas) -> Canvas:
+        
+        page = self.ocr_runner.run_tesseract(img)
+        
+        for line in page.lines:
+            pdf = self._write_line(line, pdf, page)
+
+        return pdf
+    
+    def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
+        
+        for word in line.words:
+            pdf = self._write_word(word, pdf, line, page)
+        
+        return pdf
+    
+    def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
+
+        text = pdf.beginText()
+        
+        text.setTextRenderMode(INVISIBLE)
+        text.setFont('Times-Roman', line.font_size)
+        
+        text_origin_x = word.bbox[0] * 72.0 / page.dpi
+
+        # Wir nutzen die Baseline-Informationen von tesseract
+        # Die beiden Koeffizienten definieren eine lineare Gleichung für
+        # die Baseline der Zeile        
+        wortmittelpunkt_x_absolut = (word.bbox[0] + word.bbox[2]) / 2
+        wortmittelpunkt_x_relativ = wortmittelpunkt_x_absolut - line.bbox[0]
+        baseline_abweichung = wortmittelpunkt_x_relativ * line.baseline_coefficients[0] + line.baseline_coefficients[1]
+        text_origin_y = (page.height - line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
+        
+        text.setTextOrigin(text_origin_x, text_origin_y)
+
+        # Text an bounding box anpassen
+        text_width = pdf.stringWidth(word.text, 'Times-Roman', line.font_size)
+        bbox_width = (word.bbox[2] - word.bbox[0]) * 72.0 / page.dpi
+        text.setHorizScale(100.0 * bbox_width / text_width)
+        
+        text.textLine(word.text)
+
+        # TODO: Textrotation. Ist aber schwierig. rotate() auf der canvas
+        # aufzurufen ist nicht das Ding zu tun. Hier wird um die linke untere
+        # Ecke der Canvas rotiert. Und die Syntax von text.transform() versteht
+        # kein Mensch.
+        # Falls das implementiert wird, dann sollte oben die baseline-
+        # Abweichung nicht mehr für den Wortmittelpunkt, sondern für die linke
+        # Seite der bounding box berechnet werden.
+        #
+        #rotation_angle = round(math.degrees(math.atan(abs(line.baseline_coefficients[0]))))
+        #if line.baseline_coefficients[0] > 0:
+        #    rotation_angle *= -1
+
+        pdf.drawText(text)
+        
+        return pdf
+
+@singleton
+class PdfService:
+    
+    @inject
+    def __init__(self, ocr_service: OCRService):
+
+        self.ocr_service = ocr_service
+        self.run_ocr = True
+    
+    def create_pdf_file(self, project: Project, resolution: int = 300):
+        
+   
+        pdf = Canvas(self._get_file_name(project.filebase), pageCompression=1)
+        pdf.setCreator('Scan-Convert')
+        pdf.setTitle(os.path.basename(project.filebase))
+        
+        for page in project.pages:
+            image = page.get_final_image(resolution)
+            width_in_dots, height_in_dots = image.size
+            
+            page_width = width_in_dots * 72 / resolution
+            page_height = height_in_dots * 72 / resolution
+            
+            pdf.setPageSize((width_in_dots * inch / resolution, height_in_dots * inch / resolution))
+
+            img_stream = io.BytesIO()
+            image.save(img_stream, format='png')
+            img_stream.seek(0)
+            img_reader = ImageReader(img_stream)
+            pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
+            if self.run_ocr:
+                pdf = self.ocr_service.add_ocrresult_to_pdf(image, pdf)
+            pdf.showPage()
+        
+        pdf.save()
+        
+    def _get_file_name(self, filebase: str):
+        
+        if filebase[-4:] == ".pdf":
+            return filebase
+        return filebase + ".pdf"
+
+@singleton
+class TiffService(object):
+    
+    def create_tiff_files(self, project: Project, resolution: int = 400):
+        
+        raise Exception("Not yet implemented")
+
+@singleton    
+class ProjectService(object):
+    
+    @inject
+    def __init__(self,
+                 page_generators: PAGE_GENERATORS,
+                 pdf_service: PdfService,
+                 tiff_service: TiffService):
+        
+        self.page_generators = page_generators
+        self.pdf_service = pdf_service
+        self.tiff_service = tiff_service
+        
+    def create_project(self,
+                       scans: [],
+                       scan_type: Scantype,
+                       project_type: Projecttype,
+                       filebase: str,
+                       algorithm: Algorithm = Algorithm.OTSU):
+        
+        pages = self.page_generators[scan_type].scans_to_pages(scans, algorithm)
+        return Project(pages, project_type, filebase)
+    
+    def run_project(self, project: Project):
+        
+        if project.projecttype == Projecttype.PDF:
+            self.pdf_service.create_pdf_file(project)   
+        elif project.projecttype == Projecttype.TIFF:
+            self.tiff_service.create_tiff_files(project)
+        elif project.projecttype == Projecttype.BOTH:
+            self.pdf_service.create_pdf_file(project)   
+            self.tiff_service.create_tiff_files(project)
+        else:
+            raise Exception("Unknown project type %s" % project.projecttype)
