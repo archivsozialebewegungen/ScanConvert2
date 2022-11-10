@@ -43,7 +43,7 @@ class PageTest(BaseTest):
 
     def testAlgorithmGray(self):
 
-        scan = Scan(os.path.join(self.test_file_dir, "Testtext", "Seite8.jpg"))
+        scan = Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite8.jpg"))
         page = Page(scan, Region(0, 0, scan.width, scan.height, Algorithm.GRAY))
         img = page.get_final_image()
         img.save("/tmp/gray.tif", compression="tiff_lzw")
@@ -51,21 +51,21 @@ class PageTest(BaseTest):
 
     def testAlgorithmOtsu(self):
 
-        scan = Scan(os.path.join(self.test_file_dir, "Testtext", "Seite8.jpg"))
+        scan = Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite8.jpg"))
         page = Page(scan, Region(0, 0, scan.width, scan.height, Algorithm.OTSU))
         img = page.get_final_image()
         img.save("/tmp/otsu.tif", compression="tiff_lzw")
 
     def testAlgorithmSauvola(self):
 
-        scan = Scan(os.path.join(self.test_file_dir, "Testtext", "Seite8.jpg"))
+        scan = Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite8.jpg"))
         page = Page(scan, Region(0, 0, scan.width, scan.height, Algorithm.SAUVOLA))
         img = page.get_final_image()
         img.save("/tmp/sauvola.tif", compression="tiff_lzw")
 
     def testAlgorithmFloydSteinberg(self):
 
-        scan = Scan(os.path.join(self.test_file_dir, "Testtext", "Seite8.jpg"))
+        scan = Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite8.jpg"))
         page = Page(scan, Region(0, 0, scan.width, scan.height, Algorithm.FLOYD_STEINBERG))
         img = page.get_final_image()
         img.save("/tmp/floydsteinberg.tif", compression="tiff_lzw")

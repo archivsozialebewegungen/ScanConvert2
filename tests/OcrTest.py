@@ -22,7 +22,7 @@ class OCRServiceTest(BaseTest):
         
         ocr_service = OCRService(OcrRunner())
         
-        img = Image.open(os.path.join(self.test_file_dir, "Testtext", "Seite8schraeg.jpg"))
+        img = Image.open(os.path.join(self.test_file_dir, "Singlefiles", "Seite8schraeg.jpg"))
         pdf = Canvas("/tmp/ocrtest.pdf", pageCompression=1)
         width_in_dots, height_in_dots = img.size
         pdf.setPageSize((width_in_dots * inch / 300, height_in_dots * inch / 300))
@@ -38,7 +38,7 @@ class OCRRunnerTest(BaseTest):
     def notestRun(self):
         
         ocr_runner = OcrRunner()
-        img = Image.open(os.path.join(self.test_file_dir, "Testtext", "Seite8schraeg.jpg"))
+        img = Image.open(os.path.join(self.test_file_dir, "Singlefiles", "Seite8schraeg.jpg"))
         data = ocr_runner.run_tesseract(img)
         expected = '''DPI: 300
 Dimensions: 2480 x 3507
