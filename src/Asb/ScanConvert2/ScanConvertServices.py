@@ -156,7 +156,7 @@ class ProjectService(object):
                        scans: [],
                        scan_type: Scantype,
                        project_type: Projecttype,
-                       filebase: str,
+                       filebase: str = None,
                        algorithm: Algorithm = Algorithm.OTSU):
         
         pages = self.page_generators[scan_type].scans_to_pages(scans, algorithm)

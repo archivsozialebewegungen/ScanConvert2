@@ -32,6 +32,13 @@ class Scantype(Enum):
     SHEET_90=5
     SHEET_270=6
     
+class Scannertype(Enum):
+    
+    OVERHEAD=1
+    FLATBED=2
+    FEEDER_SIMPLEX=3
+    FEEDER_DUPLEX=4
+
 class Projecttype(Enum):
     
     TIFF=1
