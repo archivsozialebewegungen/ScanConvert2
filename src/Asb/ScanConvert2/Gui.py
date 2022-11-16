@@ -7,7 +7,8 @@ import sys
 
 from PyQt5.Qt import QMainWindow, QAction, QIcon, qApp, QWizard, QWizardPage,\
     QLabel, QRadioButton, QVBoxLayout, QPushButton, QHBoxLayout, QTableWidget,\
-    QAbstractItemView, QFileDialog, QTableWidgetItem, QCheckBox
+    QAbstractItemView, QFileDialog, QTableWidgetItem, QCheckBox, QGroupBox,\
+    QWidget
 from PyQt5.QtWidgets import QApplication
 from injector import inject, Injector, singleton
 
@@ -334,12 +335,23 @@ class Window(QMainWindow):
         super().__init__()
         
         self.project_service = project_service
-        self._create_widgets()
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
+        self._create_widgets()
+        self.project = None
     
     def _create_widgets(self):
+
+        self.statusBar().showMessage("Programm gestartet...")
+
+        self._create_menu_bar()
         
+        central_widget = QWidget()
+        central_widget.setLayout(self._get_page_scroller())
+        self.setCentralWidget(central_widget)
+        
+    def _create_menu_bar(self):
+                
         new_project_action = QAction(QIcon('start.png'), '&Neues Projekt', self)
         new_project_action.setShortcut('Ctrl+N')
         new_project_action.setStatusTip('Neues Projekt')
@@ -350,13 +362,39 @@ class Window(QMainWindow):
         exit_action.setStatusTip('Exit application')
         exit_action.triggered.connect(qApp.quit)
 
-        self.statusBar().showMessage("Programm gestartet...")
-
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
         fileMenu.addAction(new_project_action)
         fileMenu.addAction(exit_action)
-
+        
+    def _get_page_scroller(self):
+        
+        page_scroller = QHBoxLayout()
+        previous_button = QPushButton("Zurück")
+        previous_button.clicked.connect(self.previous_page)
+        self.page_number_label = QLabel("0/0")
+        next_button = QPushButton("Vor")
+        next_button.clicked.connect(self.next_page)
+        page_scroller.addWidget(previous_button)
+        page_scroller.addWidget(self.page_number_label)
+        page_scroller.addWidget(next_button)
+        return page_scroller
+        
+    def previous_page(self):
+        if self.no_of_pages != 0:
+            self.current_page -= 1
+            if self.current_page == 0:
+                self.current_page = self.no_of_pages
+        self.page_number_label.setText("%d/%d" % (self.current_page, self.no_of_pages))
+    
+    def next_page(self):
+        if self.no_of_pages != 0:
+            self.current_page += 1
+            if self.current_page == self.no_of_pages + 1:
+                self.current_page = 1
+        self.page_number_label.setText("%d/%d" % (self.current_page, self.no_of_pages))
+        
+        
     def _start_new_project(self):
         
         wizard = ProjectWizard()
@@ -369,6 +407,9 @@ class Window(QMainWindow):
     def _init_from_project(self, project: Project):
         
         self.project = project
+        self.no_of_pages = len(self.project.pages)
+        self.current_page = 0
+        self.next_page() 
         
             
 if __name__ == '__main__':
