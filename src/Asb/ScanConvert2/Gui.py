@@ -5,11 +5,6 @@ Created on 06.11.2022
 '''
 import sys
 
-from PyQt5.Qt import QMainWindow, QAction, QIcon, qApp, QWizard, QWizardPage,\
-    QLabel, QRadioButton, QVBoxLayout, QPushButton, QHBoxLayout, QTableWidget,\
-    QAbstractItemView, QFileDialog, QTableWidgetItem, QCheckBox, QGroupBox,\
-    QWidget
-from PyQt5.QtWidgets import QApplication
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.PageGenerators import PageGeneratorsModule
@@ -17,6 +12,12 @@ from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from Asb.ScanConvert2.ScanConvertDomain import Projecttype, Scan, Project,\
     Scannertype, Scantype
 import os
+from PyQt6.QtWidgets import QWizard, QVBoxLayout, QLabel, QRadioButton,\
+    QWizardPage, QPushButton, QHBoxLayout, QFileDialog, QTableWidgetItem,\
+    QAbstractItemView, QTableWidget, QCheckBox, QMainWindow, QGraphicsView,\
+    QApplication, QWidget, QGraphicsScene
+from PyQt6.QtGui import QAction, QIcon, QPixmap
+from PIL.ImageQt import ImageQt
 
 class ProjectWizard(QWizard):
     
@@ -139,14 +140,9 @@ class ProjectWizardPageScans(QWizardPage):
 
     def add_files(self):
         
-        dialog = QFileDialog()
-        dialog.setFileMode(QFileDialog.ExistingFiles)
-        dialog.setNameFilter("Graphikdateien (*.jpg *.tif *.tiff *.gif *.png)")
-        
-        if dialog.exec_():
-            filenames = dialog.selectedFiles()
-            for filename in filenames:
-                self.append_fileinfo(filename)
+        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.tif *.tiff *.gif *.png)")
+        for filename in filenames[0]:
+            self.append_fileinfo(filename)
 
     def append_fileinfo(self, filename):
         
@@ -169,10 +165,10 @@ class ProjectWizardPageScans(QWizardPage):
             self.flip_lines(index.row(), index.row() - 1)
 
         selection_model.clearSelection()
-        self.filename_table.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         for row in selected_rows:
             self.filename_table.selectRow(row)
-        self.filename_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
     def files_down(self):
         
@@ -188,10 +184,10 @@ class ProjectWizardPageScans(QWizardPage):
             self.flip_lines(index.row(), index.row() + 1)
 
         selection_model.clearSelection()
-        self.filename_table.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
         for row in selected_rows:
             self.filename_table.selectRow(row)
-        self.filename_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
     def remove_files(self):
         
@@ -218,8 +214,7 @@ class ProjectWizardPageScans(QWizardPage):
         self.filename_table.setColumnCount(1)
         self.filename_table.setColumnWidth(0,500)
         self.filename_table.setHorizontalHeaderLabels(["Datei"])
-        self.filename_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        #self.filename_table.itemClicked.connect(self._file_clicked)
+        self.filename_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         
         return self.filename_table
 
@@ -334,6 +329,9 @@ class Window(QMainWindow):
 
         super().__init__()
         
+        self.current_page_no = 0
+        self.no_of_pages = 0
+        
         self.project_service = project_service
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -347,8 +345,21 @@ class Window(QMainWindow):
         self._create_menu_bar()
         
         central_widget = QWidget()
-        central_widget.setLayout(self._get_page_scroller())
+        
+        self.main_layout = QHBoxLayout()
+        self.left_panel = QVBoxLayout()
+        self.right_panel = QVBoxLayout()
+        
+        self.main_layout.addLayout(self.left_panel)
+        self.main_layout.addLayout(self.right_panel)
+        
+        self.left_panel.addLayout(self._get_page_scroller())
+        
+        central_widget.setLayout(self.main_layout)
         self.setCentralWidget(central_widget)
+        
+        self.graphics_view = QGraphicsView()
+        self.right_panel.addWidget(self.graphics_view)
         
     def _create_menu_bar(self):
                 
@@ -360,7 +371,7 @@ class Window(QMainWindow):
         exit_action = QAction(QIcon('exit.png'), '&Beenden', self)
         exit_action.setShortcut('Ctrl+Q')
         exit_action.setStatusTip('Exit application')
-        exit_action.triggered.connect(qApp.quit)
+        exit_action.triggered.connect(QApplication.quit)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
@@ -382,18 +393,32 @@ class Window(QMainWindow):
         
     def previous_page(self):
         if self.no_of_pages != 0:
-            self.current_page -= 1
-            if self.current_page == 0:
-                self.current_page = self.no_of_pages
-        self.page_number_label.setText("%d/%d" % (self.current_page, self.no_of_pages))
+            self.current_page_no -= 1
+            if self.current_page_no == 0:
+                self.current_page_no = self.no_of_pages
+        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        self.show_page()
     
     def next_page(self):
         if self.no_of_pages != 0:
-            self.current_page += 1
-            if self.current_page == self.no_of_pages + 1:
-                self.current_page = 1
-        self.page_number_label.setText("%d/%d" % (self.current_page, self.no_of_pages))
+            self.current_page_no += 1
+            if self.current_page_no == self.no_of_pages + 1:
+                self.current_page_no = 1
+        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        self.show_page()
+
+    def show_page(self):
         
+        self.graphics_view.invalidateScene()
+        q_img = ImageQt(self.project.pages[self.current_page_no].get_base_image())
+        scene = QGraphicsScene()
+        pixmap = QPixmap.fromImage(q_img)
+        scene.addPixmap(pixmap)
+        try:
+            self.graphics_view.setScene(scene)
+        except Exception as e:
+            print("Something is wrong")
+            
         
     def _start_new_project(self):
         
@@ -408,7 +433,7 @@ class Window(QMainWindow):
         
         self.project = project
         self.no_of_pages = len(self.project.pages)
-        self.current_page = 0
+        self.current_page_no = 0
         self.next_page() 
         
             
@@ -419,4 +444,4 @@ if __name__ == '__main__':
     injector = Injector(PageGeneratorsModule())
     win = injector.get(Window)
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
