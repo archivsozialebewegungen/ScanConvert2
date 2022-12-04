@@ -88,11 +88,17 @@ class Region(object):
 
     def __init__(self, x: int, y: int, width: int, height: int, mode_algorithm: Algorithm=Algorithm.NONE):
 
+        print("x: %d y: %d with: %d height: %d" % (x, y, width, height))
         self.x = x
         self.y = y
         self.width = width
         self.height = height
         self.mode_algorithm = mode_algorithm
+        
+    def __str__(self):
+        
+        return "Links oben: %d | %d\nRechts unten: %d | %d\nBreite: %d\nHöhe: %d" % (
+            self.x, self.y, self.x2, self.y2, self.width, self.height)
         
     x2 = property(lambda self: self.x + self.width)
     y2 = property(lambda self: self.y + self.height)

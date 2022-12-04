@@ -3,323 +3,174 @@ Created on 06.11.2022
 
 @author: michael
 '''
+import pickle
 import sys
+import tempfile
 
+from PIL import Image
+from PIL.ImageQt import ImageQt
+from PySide6.QtCore import QRect, QSize, QPointF, QRectF, Qt, QPoint
+from PySide6.QtGui import QPixmap, QAction, QIcon
+from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
+    QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
+    QMainWindow, \
+    QWidget, QGraphicsView, QApplication
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.PageGenerators import PageGeneratorsModule
+from Asb.ScanConvert2.ProjectWizard import ProjectWizard
+from Asb.ScanConvert2.ScanConvertDomain import Project, \
+    Region
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
-from Asb.ScanConvert2.ScanConvertDomain import Projecttype, Scan, Project,\
-    Scannertype, Scantype
-import os
-from PyQt6.QtWidgets import QWizard, QVBoxLayout, QLabel, QRadioButton,\
-    QWizardPage, QPushButton, QHBoxLayout, QFileDialog, QTableWidgetItem,\
-    QAbstractItemView, QTableWidget, QCheckBox, QMainWindow, QGraphicsView,\
-    QApplication, QWidget, QGraphicsScene
-from PyQt6.QtGui import QAction, QIcon, QPixmap
-from PIL.ImageQt import ImageQt
 
-class ProjectWizard(QWizard):
+
+CREATE_REGION = "Region anlegen"
+APPLY_REGION = "Auswahl übernehmen"
+DELETE_REGION = "Region löschen"
+CANCEL_REGION = "Auswahl abbrechen"
+
+class PageView(QGraphicsView):
     
-    PROJECT_TYPE_PAGE = 0
-    SCANNER_TYPE_PAGE = 1
-    PAGE_PER_SCAN_PAGE = 2
-    SCANS_PAGE = 3
-    SCAN_ROTATION_PAGE = 4
-        
     def __init__(self):
         
         super().__init__()
-        self.pages = {
-            self.PROJECT_TYPE_PAGE: ProjectWizardPageProjectType(self),
-            self.SCANNER_TYPE_PAGE: ProjectWizardPageScannerType(self),
-            self.PAGE_PER_SCAN_PAGE: ProjectWizardPagePagesPerScan(self),
-            self.SCANS_PAGE: ProjectWizardPageScans(self),
-            self.SCAN_ROTATION_PAGE: ProjectWizardPageRotation(self)
-            }
-        for page_id in self.pages.keys():
-            self.setPage(page_id, self.pages[page_id])
-             
-        self.setWindowTitle("Neues Projekt anlegen")
-        
-    def _get_scan_type(self):
-        
-        if self.pages_per_scan == 1:
-            return self._single_page_scan_type()
-        else:
-            return self._double_page_scan_type()
-    
-    def _single_page_scan_type(self):
-        
-        if self.scanner_type == Scannertype.OVERHEAD:
-            # For Overhead-Scanner we assume no rotation
-            return Scantype.SINGLE
-    
-    scan_type = property(_get_scan_type)
-    scans = property(lambda self: self.pages[self.SCANS_PAGE].scans)
-    scanner_type = property(lambda self: self.pages[self.SCANNER_TYPE_PAGE].scanner_type)
-    pages_per_scan = property(lambda self: self.pages[self.PAGE_PER_SCAN_PAGE].pages_per_scan)
-    project_type = property(lambda self: self.pages[self.PROJECT_TYPE_PAGE].project_type)
-    scan_rotation = property(lambda self: self.pages[self.SCAN_ROTATION_PAGE].scan_rotation)
-        
-class ProjectWizardPageProjectType(QWizardPage):
-    
-    def __init__(self, parent):
-        
-        super().__init__(parent)
-        self.wizard = parent
-        self.project_type = None
-        
-        
-        self.setTitle("Was soll für die Archivierung erzeugt werden?")
-        self.setSubTitle("Pdf-Dateien sind für den normalen Gebrauch, TIFF-Dateien " +
-                         "für die Langzeitarchivierung.")
-        
-        self.button_texts = {
-            "Pdf-Erstellung (300 dpi, Schwarz-Weiß)": Projecttype.PDF,
-            'TIFF-Datei-Erstellung für Langzeitarchivierung (400 dpi)': Projecttype.TIFF,
-            'Pdf- und TIFF-Datei-Erstellung': Projecttype.BOTH
-            }
-        
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel('Bitte den Projekttyp auswählen:'))
-        for button_text in self.button_texts.keys(): 
-            radiobutton = QRadioButton(button_text)
-            radiobutton.toggled.connect(self.on_click)
-            if self.button_texts[button_text] == Projecttype.PDF:
-                radiobutton.setChecked(True)
-            layout.addWidget(radiobutton)
+        self.img = None
+        self.rubberBand = QRubberBand(QRubberBand.Shape.Rectangle, self)
+        self.reset_rubberband()
+        self.selection_cache = (0,0,0,0)
+        self.region_select = False
 
-        self.setLayout(layout)
-        
-    def on_click(self):
+    def set_page(self, img: Image):
 
-        radiobutton = self.sender()
-        self.project_type = self.button_texts[radiobutton.text()]        
+        self.img = img
+        print("Bildgröße: %d x %d" % (img.width, img.height))
+        pixmap = QPixmap(ImageQt(self.img))
+        self.scene = QGraphicsScene()
+        self.scene.addPixmap(pixmap)
+        self.invalidateScene()
+        self.setScene(self.scene)
+        self.fitInView(self.image_rectangle, Qt.AspectRatioMode.KeepAspectRatio)
+        self.reset_rubberband()
 
+    def mousePressEvent(self, event):
 
-class ProjectWizardPageScans(QWizardPage):
-    
-    def __init__(self, parent):
-        
-        super().__init__(parent)
-        self.wizard = parent
-        
-        print(self.wizard)
-        self.setTitle("Scans zum Projekt hinzufügen")
-        self.setSubTitle("Die Scans müssen in der richtigen Reihenfolge angegeben werden. " +
-            "Das ist je nach Scannertyp unterschiedlich (siehe Handbuch).")
-        
-        self.scans = []
-        
-        layout = QVBoxLayout()
-        
-        layout.addLayout(self._get_file_button_layout())
-        layout.addWidget(self._get_filename_table_widget())
-        
-        self.setLayout(layout)
+        if not self.region_select:
+            return
+                
+        self.origin = event.pos()
+        self.rubberBand.setGeometry(QRect(self.origin, QSize()).normalized())
+        self.rubberBand.show()
 
-    def _get_file_button_layout(self):
+    def mouseMoveEvent(self, event):
 
-        file_selection_button = QPushButton("Laden")
-        file_up_button = QPushButton("Hoch")
-        file_down_button = QPushButton("Runter")
-        file_remove_button = QPushButton("Entfernen")
-        file_selection_button.clicked.connect(self.add_files)
-        file_up_button.clicked.connect(self.files_up)
-        file_down_button.clicked.connect(self.files_down)
-        file_remove_button.clicked.connect(self.remove_files)
+        if not self.region_select:
+            return
 
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(file_selection_button)
-        button_layout.addWidget(file_up_button)
-        button_layout.addWidget(file_down_button)
-        button_layout.addWidget(file_remove_button)
+        self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
+
+    def mouseReleaseEvent(self, event):
         
-        return button_layout
+        if not self.region_select:
+            return
 
-    def add_files(self):
+        self.cache_img_selection()
         
-        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.tif *.tiff *.gif *.png)")
-        for filename in filenames[0]:
-            self.append_fileinfo(filename)
+    def resizeEvent(self, *args, **kwargs):
+        super().resizeEvent(*args, **kwargs)
+        if self.img is not None:
+            self.fitInView(self.image_rectangle, Qt.AspectRatioMode.KeepAspectRatio)
+        self.restore_img_selection()
 
-    def append_fileinfo(self, filename):
-        
-        self.scans.append(Scan(filename))
-        self.filename_table.setRowCount(len(self.scans))
-        self.display_line(len(self.scans) - 1)
-        
-    def display_line(self, index):
-        
-        self.filename_table.setItem(index, 0, QTableWidgetItem(os.path.basename(self.scans[index].filename)))
-        
-    def files_up(self):
-        
-        selected_rows = []
-        selection_model = self.filename_table.selectionModel()
-        for index in self.filename_table.selectionModel().selectedRows():
-            if index.row() == 0:
-                continue
-            selected_rows.append(index.row() - 1)
-            self.flip_lines(index.row(), index.row() - 1)
+    def show_region(self, region: Region):
 
-        selection_model.clearSelection()
-        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        for row in selected_rows:
-            self.filename_table.selectRow(row)
-        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-
-    def files_down(self):
+        self.selection_cache = (region.x, region.y, region.x2, region.y2)
+        self.restore_img_selection()
+        return
         
-        selected_rows = []
-        selection_model = self.filename_table.selectionModel()
-        indices = self.filename_table.selectionModel().selectedRows()
-
-        # Must delete in reverse order
-        for index in reversed(sorted(indices)):
-            if index.row() == len(self.scans) - 1:
-                continue
-            selected_rows.append(index.row() + 1)
-            self.flip_lines(index.row(), index.row() + 1)
-
-        selection_model.clearSelection()
-        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
-        for row in selected_rows:
-            self.filename_table.selectRow(row)
-        self.filename_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-
-    def remove_files(self):
+    def restore_img_selection(self):
         
-        indices = self.filename_table.selectionModel().selectedRows()
+        if self.selection_cache == (0,0,0,0):
+            return
+        
+        (scale, x_offset, y_offset) = self._get_scale_and_offsets()
+                
+        rubberband_x1 = int((self.selection_cache[0] * scale) + x_offset)
+        rubberband_y1 = int((self.selection_cache[1] * scale) + y_offset)
+        rubberband_width = int(((self.selection_cache[2] - self.selection_cache[0]) * scale))
+        rubberband_height = int(((self.selection_cache[3] - self.selection_cache[1]) * scale))
+        
+        self.origin = QPoint(rubberband_x1, rubberband_y1)
+        self.rubberBand.hide()
+        self.rubberBand.setGeometry(QRect(QPoint(rubberband_x1, rubberband_y1), QSize(rubberband_width, rubberband_height)).normalized())
+        self.rubberBand.show()
 
-        # Must delete in reverse order
-        for each_row in reversed(sorted(indices)):
-            self.filename_table.removeRow(each_row.row())
-            del self.scans[each_row.row()]
+    def reset_rubberband(self):
+        
+        self.selection_cache = (0,0,0,0)
+        self.rubberBand.setGeometry(QRect(0,0,0,0).normalized())
+        self.rubberBand.hide()
+        
+    def cache_img_selection(self):
+        
+        (scale, x_offset, y_offset) = self._get_scale_and_offsets()
+        
+        (sel_x1,  sel_y1, sel_x2, sel_y2) = self.rubberBand.geometry().getCoords()
+        page_x1 = (sel_x1 - x_offset) / scale
+        page_x2 = (sel_x2 - x_offset) / scale
+        page_y1 = (sel_y1 - y_offset) / scale
+        page_y2 = (sel_y2 - y_offset) / scale
+
+        if page_x1 < 0:
+            page_x1 = 0
+        if page_x2 > self.img.width:
+            page_x2 = self.img.width
+        if page_y1 < 0:
+            page_y1 = 0
+        if page_y2 > self.img.height:
+            page_y2 = self.img.height
+        
+        if page_x1 > self.img.width or \
+            page_y1 > self.img.height or \
+            page_x2 < 0 or \
+            page_y2 < 0:
             
-    def flip_lines(self, line1, line2):
+            self.selection_cache = (0,0,0,0)
+
+        self.selection_cache = (page_x1, page_y1, page_x2, page_y2)
+
+    def _get_scale_and_offsets(self):
+
+        graphics_view_geometry = self.geometry()
         
-        scan1 = self.scans[line1]
-        self.scans[line1] = self.scans[line2]
-        self.scans[line2] = scan1
-        self.display_line(line1)
-        self.display_line(line2)
+        scale_x = graphics_view_geometry.width() / self.img.width
+        scale_y = graphics_view_geometry.height() / self.img.height
 
+        scale = scale_x
+        if scale_x > scale_y:
+            scale = scale_y
 
-    def _get_filename_table_widget(self):
-
-        self.filename_table = QTableWidget()
-        self.filename_table.setGeometry(400, 400, 600, 300)
-        self.filename_table.setColumnCount(1)
-        self.filename_table.setColumnWidth(0,500)
-        self.filename_table.setHorizontalHeaderLabels(["Datei"])
-        self.filename_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        scaled_img_width = self.img.width * scale
+        scaled_img_height = self.img.height * scale
         
-        return self.filename_table
-
-    def nextId(self):
-    
-        if self.wizard.pages[self.wizard.SCANNER_TYPE_PAGE].scanner_type == Scannertype.FLATBED:
-            return self.wizard.SCAN_ROTATION_PAGE
+        x_offset = int((self.geometry().width() - scaled_img_width) / 2)
+        y_offset = int((self.geometry().height() - scaled_img_height) / 2)
         
-        return -1
-
-class ProjectWizardPagePagesPerScan(QWizardPage):
-    
-    def __init__(self, parent):
+        assert(x_offset == 0 or y_offset == 0)
         
-        super().__init__(parent)
-        self.wizard = parent
+        return (scale, x_offset, y_offset)
 
-        self.setTitle("Auswahl der Seiten pro Scan")
-        self.setSubTitle("\"Gemischt\" bedeutet, dass Titel und Rückseite " +
-                         "auch Einzelscans sein können.")
+    def get_selected_region(self):
         
-        self.pages_per_scan = None
+        x1 = int(self.selection_cache[0])
+        y1 = int(self.selection_cache[1])
+        x2 = int(self.selection_cache[2])
+        y2 = int(self.selection_cache[3])
+        width = x2 - x1
+        height = y2 - y1
+        return Region(x1, y1, width, height)
+                
+    image_rectangle = property(lambda self: QRectF(0, 0, self.img.width, self.img.height))
 
-        self.labels = {"1 Seite pro Scan": 1,
-                       "2 Seiten pro Scan oder gemischt": 2}
-
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel('Wie viele Seiten sind auf jedem Scan?'))
-        for label in self.labels.keys():
-            radiobutton = QRadioButton(label)
-            radiobutton.toggled.connect(self.on_click)
-            if self.labels[label] == 1:
-                radiobutton.setChecked(True)
-            layout.addWidget(radiobutton)
-
-        self.setLayout(layout)
-        
-    def on_click(self):
-
-        radiobutton = self.sender()
-        self.pages_per_scan = self.labels[radiobutton.text()]
-
-class ProjectWizardPageScannerType(QWizardPage):
-    
-    def __init__(self, parent):
-
-        super().__init__(parent)
-        
-        self.setTitle("Scanner-Typ wählen")
-        self.setSubTitle("Davon hängt ab, wie die Seitenanordnung interpretiert wird.")
- 
-        self.labels = {"Overheadscanner": Scannertype.OVERHEAD,
-                       "Flachbettscanner": Scannertype.FLATBED,
-                       "Einzug (Duplex)": Scannertype.FEEDER_DUPLEX,
-                       "Einzug (Simplex)": Scannertype.FEEDER_SIMPLEX}
-        self.scanner_type = None
-
-        layout = QVBoxLayout()
-        for label in self.labels.keys():
-            radiobutton = QRadioButton(label)
-            radiobutton.toggled.connect(self.on_click)
-            if self.labels[label] == Scannertype.OVERHEAD:
-                radiobutton.setChecked(True)
-            layout.addWidget(radiobutton)
-
-        self.setLayout(layout)
-
-    def on_click(self):
-
-        radiobutton = self.sender()
-        self.scanner_type = self.labels[radiobutton.text()]
-
-class ProjectWizardPageRotation(QWizardPage):
-    
-    def __init__(self, parent):
-        
-        super().__init__(parent)
-        
-        self.labels = {"Nein, sie sind nicht gedeht": 0,
-                       "Um 90° im Uhrzeigersinn": 90,
-                       "Stehen auf dem Kopf": 180,
-                       "Um 90° gegen den Uhrzeigersinn": 270}
-        self.scan_rotation = None
-
-        layout = QVBoxLayout()
-        layout.addWidget(QLabel('Sind die Scans gedreht?'))
-        for label in self.labels.keys():
-            radiobutton = QRadioButton(label)
-            radiobutton.toggled.connect(self.on_click)
-            if self.labels[label] == 0:
-                radiobutton.setChecked(True)
-            layout.addWidget(radiobutton)
-            
-        self.alternating_checkbutton = QCheckBox("Drehung ist alternierend")
-        layout.addWidget(self.alternating_checkbutton)
-
-        self.setLayout(layout)
-        
-    def on_click(self):
-
-        radiobutton = self.sender()
-        self.scan_rotation = self.labels[radiobutton.text()]
-
-    alternating = property(lambda self: self.alternating_checkbutton.isChecked())
-    
 @singleton
 class Window(QMainWindow):
     
@@ -330,7 +181,9 @@ class Window(QMainWindow):
         super().__init__()
         
         self.current_page_no = 0
+        self.current_region_no = 0
         self.no_of_pages = 0
+        self.no_of_regions = 0
         
         self.project_service = project_service
         self.setGeometry(50, 50, 1000, 600)
@@ -354,12 +207,27 @@ class Window(QMainWindow):
         self.main_layout.addLayout(self.right_panel)
         
         self.left_panel.addLayout(self._get_page_scroller())
+        self.left_panel.addLayout(self._get_region_scroller())
         
         central_widget.setLayout(self.main_layout)
         self.setCentralWidget(central_widget)
         
-        self.graphics_view = QGraphicsView()
-        self.right_panel.addWidget(self.graphics_view)
+        self.right_panel.addLayout(self._get_right_panel())
+        
+    def _get_right_panel(self):
+
+        right_panel_layout = QVBoxLayout()
+        page_view_buttons_layout = QHBoxLayout()
+        self.new_region_button = QPushButton(text="Region anlegen")
+        self.new_region_button.clicked.connect(self.create_save_region)
+        self.delete_region_button = QPushButton(text="Region löschen")
+        self.delete_region_button.clicked.connect(self.delete_cancel_region)
+        page_view_buttons_layout.addWidget(self.new_region_button)
+        page_view_buttons_layout.addWidget(self.delete_region_button)
+        right_panel_layout.addLayout(page_view_buttons_layout)
+        self.graphics_view = PageView()
+        right_panel_layout.addWidget(self.graphics_view)
+        return right_panel_layout
         
     def _create_menu_bar(self):
                 
@@ -370,13 +238,38 @@ class Window(QMainWindow):
 
         exit_action = QAction(QIcon('exit.png'), '&Beenden', self)
         exit_action.setShortcut('Ctrl+Q')
-        exit_action.setStatusTip('Exit application')
+        exit_action.setStatusTip('Programm beenden')
         exit_action.triggered.connect(QApplication.quit)
+
+        save_action = QAction(QIcon('save.png'), '&Speichern', self)
+        save_action.setShortcut('Ctrl+S')
+        save_action.setStatusTip('Project speichern')
+        save_action.triggered.connect(self._save_project)
+
+        load_action = QAction(QIcon('load.png'), '&Laden', self)
+        load_action.setShortcut('Ctrl+L')
+        load_action.setStatusTip('Projekt laden')
+        load_action.triggered.connect(self._load_project)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
         fileMenu.addAction(new_project_action)
+        fileMenu.addAction(save_action)
+        fileMenu.addAction(load_action)
         fileMenu.addAction(exit_action)
+        
+    def _save_project(self):
+        
+        file = open("/tmp/project.pkl", "wb")
+        pickle.dump(self.project, file)
+        file.close()
+    
+    def _load_project(self):
+        
+        file = open("/tmp/project.pkl", "rb")
+        project = pickle.load(file)
+        file.close()
+        self._init_from_project(project)
         
     def _get_page_scroller(self):
         
@@ -390,35 +283,140 @@ class Window(QMainWindow):
         page_scroller.addWidget(self.page_number_label)
         page_scroller.addWidget(next_button)
         return page_scroller
+
+    def _get_region_scroller(self):
+        
+        region_scroller = QHBoxLayout()
+        previous_button = QPushButton("Zurück")
+        previous_button.clicked.connect(self.previous_region)
+        self.region_number_label = QLabel("0/0")
+        next_button = QPushButton("Vor")
+        next_button.clicked.connect(self.next_region)
+        region_scroller.addWidget(previous_button)
+        region_scroller.addWidget(self.region_number_label)
+        region_scroller.addWidget(next_button)
+        return region_scroller
         
     def previous_page(self):
-        if self.no_of_pages != 0:
-            self.current_page_no -= 1
-            if self.current_page_no == 0:
-                self.current_page_no = self.no_of_pages
-        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        
+        if self.no_of_pages == 0:
+            return
+        
+        self.current_page_no -= 1
+        if self.current_page_no == 0:
+            self.current_page_no = self.no_of_pages
         self.show_page()
     
     def next_page(self):
-        if self.no_of_pages != 0:
-            self.current_page_no += 1
-            if self.current_page_no == self.no_of_pages + 1:
-                self.current_page_no = 1
-        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+
+        if self.no_of_pages == 0:
+            return
+        
+        self.current_page_no += 1
+        if self.current_page_no == self.no_of_pages + 1:
+            self.current_page_no = 1
+        
         self.show_page()
+        
+    def next_region(self):
+
+        if self.no_of_regions == 0:
+            return
+        
+        self.current_region_no += 1
+        if self.current_region_no == self.no_of_regions + 1:
+            self.current_region_no = 1
+
+        self.show_region()
+
+    def previous_region(self):
+
+        if self.no_of_regions == 0:
+            return
+        
+        self.current_region_no -= 1
+        if self.current_region_no == 0:
+            self.current_region_no = self.no_of_regions
+        
+        self.show_region()    
+
+    def create_save_region(self):
+        
+        if self.new_region_button.text() == CREATE_REGION:
+            self.new_region_button.setText(APPLY_REGION)
+            self.delete_region_button.setText(CANCEL_REGION)
+            self.create_region()
+        else:
+            self.new_region_button.setText(CREATE_REGION)
+            self.delete_region_button.setText(DELETE_REGION)
+            self.apply_region()
+
+            
+    def create_region(self):
+        """
+        Reset selection an wait for selection
+        """
+        self.graphics_view.region_select = True
+        self.graphics_view.reset_rubberband()
+    
+    
+    def apply_region(self):
+        """
+        Selection is finished and we add the selected region to the
+        sub regions of the page
+        """
+        self.graphics_view.region_select = False
+
+        self.project.pages[self.current_page_no-1].sub_regions.append(self.graphics_view.get_selected_region())
+        # TODO: Check if something is selected at all
+        self.no_of_regions = len(self.project.pages[self.current_page_no-1].sub_regions)
+        self.current_region_no = self.no_of_regions
+        self.show_region()
+    
+    def delete_cancel_region(self):
+        
+        if self.delete_region_button.text() == DELETE_REGION:
+            self.delete_region()
+        else:
+            self.delete_region_button.setText(DELETE_REGION)
+            self.new_region_button.setText(CREATE_REGION)
+            self.cancel_region()
+    
+    def delete_region(self):
+        
+        if self.current_region_no == 0:
+            return
+        del(self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1])
+        self.reset_region()
+        
+    def reset_region(self):
+
+        self.no_of_regions = len(self.project.pages[self.current_page_no-1].sub_regions)
+        if self.no_of_regions == 0:
+            self.current_region_no = 0
+        else:
+            self.current_region_no = 1
+            
+        self.show_region()
+    
+    def cancel_region(self):
+        
+        self.show_region()
+        self.graphics_view.region_select = False
+        
+    def show_region(self):
+
+        self.region_number_label.setText("%d/%d" % (self.current_region_no, self.no_of_regions))
+        self.graphics_view.reset_rubberband()
+        if self.no_of_regions > 0:
+            self.graphics_view.show_region(self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1])
 
     def show_page(self):
-        
-        self.graphics_view.invalidateScene()
-        q_img = ImageQt(self.project.pages[self.current_page_no].get_base_image())
-        scene = QGraphicsScene()
-        pixmap = QPixmap.fromImage(q_img)
-        scene.addPixmap(pixmap)
-        try:
-            self.graphics_view.setScene(scene)
-        except Exception as e:
-            print("Something is wrong")
-            
+
+        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        self.graphics_view.set_page(self.project.pages[self.current_page_no-1].get_base_image())
+
+        self.reset_region()
         
     def _start_new_project(self):
         
