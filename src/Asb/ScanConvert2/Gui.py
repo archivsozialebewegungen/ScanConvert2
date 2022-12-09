@@ -5,16 +5,16 @@ Created on 06.11.2022
 '''
 import pickle
 import sys
-import tempfile
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QRect, QSize, QPointF, QRectF, Qt, QPoint
+from PySide6.QtCore import QRect, QSize, QRectF, Qt, QPoint
 from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication
+    QWidget, QGraphicsView, QApplication, QFrame, QGroupBox, QButtonGroup,\
+    QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.PageGenerators import PageGeneratorsModule
@@ -197,23 +197,56 @@ class Window(QMainWindow):
 
         self._create_menu_bar()
         
-        central_widget = QWidget()
-        
         self.main_layout = QHBoxLayout()
-        self.left_panel = QVBoxLayout()
-        self.right_panel = QVBoxLayout()
         
-        self.main_layout.addLayout(self.left_panel)
-        self.main_layout.addLayout(self.right_panel)
+        self.main_layout.addLayout(self._get_left_panel())
+        self.main_layout.addLayout(self._get_right_panel())
         
-        self.left_panel.addLayout(self._get_page_scroller())
-        self.left_panel.addLayout(self._get_region_scroller())
-        
+        central_widget = QWidget()
         central_widget.setLayout(self.main_layout)
+
         self.setCentralWidget(central_widget)
         
-        self.right_panel.addLayout(self._get_right_panel())
+
+    def _get_left_panel(self):
         
+        left_panel = QVBoxLayout()
+        left_panel.addLayout(self._get_page_scroller())
+        left_panel.addLayout(self._get_page_params_layout())
+        left_panel.addLayout(self._get_region_scroller())
+        
+        return left_panel
+        
+    def _get_page_params_layout(self):
+        
+        page_params = QVBoxLayout()
+        page_params.addWidget(self._get_resolution_box())
+        return page_params
+
+    def _get_resolution_box(self):
+        
+        res_box = QGroupBox("Auflösungsänderung")
+        res_layout = QVBoxLayout()
+        res_layout_1 = QHBoxLayout()
+        resolution_group = QButtonGroup(self)
+        self.resolution_no = QRadioButton("keine", self)
+        self.resolution_300 = QRadioButton("300 dpi", self)
+        self.resolution_400 = QRadioButton("400 dpi", self)
+        self.resolution_no.setChecked(True)
+        res_layout_1.addWidget(self.resolution_no)
+        res_layout_1.addWidget(self.resolution_300)
+        res_layout_1.addWidget(self.resolution_400)
+        resolution_group.addButton(self.resolution_no)
+        resolution_group.addButton(self.resolution_300)
+        resolution_group.addButton(self.resolution_400)
+        res_layout.addLayout(res_layout_1)
+        self.correct_res_only_checkbox = QCheckBox("Auflösung nur korrigieren", self)
+        res_layout.addWidget(self.correct_res_only_checkbox)
+        res_box.setLayout(res_layout)
+        
+        return res_box
+
+    
     def _get_right_panel(self):
 
         right_panel_layout = QVBoxLayout()
@@ -277,6 +310,8 @@ class Window(QMainWindow):
         previous_button = QPushButton("Zurück")
         previous_button.clicked.connect(self.previous_page)
         self.page_number_label = QLabel("0/0")
+        self.page_number_label.setAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+        self.page_number_label.setFixedWidth(65)
         next_button = QPushButton("Vor")
         next_button.clicked.connect(self.next_page)
         page_scroller.addWidget(previous_button)
@@ -290,6 +325,8 @@ class Window(QMainWindow):
         previous_button = QPushButton("Zurück")
         previous_button.clicked.connect(self.previous_region)
         self.region_number_label = QLabel("0/0")
+        self.region_number_label.setAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+        self.region_number_label.setFixedWidth(65)
         next_button = QPushButton("Vor")
         next_button.clicked.connect(self.next_region)
         region_scroller.addWidget(previous_button)
