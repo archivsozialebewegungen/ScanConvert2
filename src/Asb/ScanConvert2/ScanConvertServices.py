@@ -13,9 +13,9 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
-from Asb.ScanConvert2.PageGenerators import PAGE_GENERATORS
-from Asb.ScanConvert2.ScanConvertDomain import Project, Scantype, Algorithm, \
-    Projecttype
+from Asb.ScanConvert2.ScanConvertDomain import Project, Algorithm, \
+    Projecttype, SortType
+from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
 
 
 INVISIBLE = 3
@@ -144,24 +144,29 @@ class ProjectService(object):
     
     @inject
     def __init__(self,
-                 page_generators: PAGE_GENERATORS,
+                 project_generator: ProjectGenerator,
                  pdf_service: PdfService,
                  tiff_service: TiffService):
         
-        self.page_generators = page_generators
+        self.project_generator = project_generator
         self.pdf_service = pdf_service
         self.tiff_service = tiff_service
         
     def create_project(self,
-                       scans: [],
-                       scan_type: Scantype,
-                       project_type: Projecttype,
-                       filebase: str = None,
-                       algorithm: Algorithm = Algorithm.OTSU):
-        
-        pages = self.page_generators[scan_type].scans_to_pages(scans, algorithm)
-        return Project(pages, project_type, filebase)
-    
+                    scans: [],
+                    pages_per_scan: int,
+                    sort_type: SortType,
+                    scan_rotation: int,
+                    rotation_alternating: bool,
+                    pdf_algorithm: Algorithm) -> Project:
+
+        return self.project_generator.scans_to_project(scans,
+                    pages_per_scan,
+                    sort_type,
+                    scan_rotation,
+                    rotation_alternating,
+                    pdf_algorithm)
+
     def run_project(self, project: Project):
         
         if project.projecttype == Projecttype.PDF:

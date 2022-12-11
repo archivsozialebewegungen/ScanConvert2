@@ -22,6 +22,14 @@ class Algorithm(Enum):
     OTSU=3
     SAUVOLA=4
     FLOYD_STEINBERG=5
+    
+class SortType(Enum):
+    
+    STRAIGHT=1
+    SINGLE_ALL_FRONT_ALL_BACK=2
+    SHEET=3
+    SHEET_ALL_FRONT_ALL_BACK=4
+    STRAIGHT_DOUBLE=5
 
 class Scantype(Enum):
     
@@ -270,11 +278,7 @@ class Page:
 class Project(object):
     
     def __init__(self,
-                 pages: [],
-                 projecttype: Projecttype,
-                 filebase: str):
+                 pages: []):
 
         self.pages = pages
-        self.projecttype = projecttype
-        self.filebase = filebase
         

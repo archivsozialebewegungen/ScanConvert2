@@ -17,8 +17,7 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
 
-from Asb.ScanConvert2.PageGenerators import PageGeneratorsModule
-from Asb.ScanConvert2.ProjectWizard import ProjectWizard
+from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
@@ -457,11 +456,14 @@ class Window(QMainWindow):
         
     def _start_new_project(self):
         
-        wizard = ProjectWizard()
+        wizard = ExpertProjectWizard()
         if wizard.exec():
             project = self.project_service.create_project(wizard.scans,
-                                                          wizard.scan_type,
-                                                          wizard.project_type)
+                                                          wizard.pages_per_scan,
+                                                          wizard.sort_type,
+                                                          wizard.scan_rotation,
+                                                          wizard.rotation_alternating,
+                                                          wizard.pdf_algorithm)
             self._init_from_project(project)
         
     def _init_from_project(self, project: Project):
@@ -476,7 +478,7 @@ if __name__ == '__main__':
     
     app = QApplication(sys.argv)
 
-    injector = Injector(PageGeneratorsModule())
+    injector = Injector()
     win = injector.get(Window)
     win.show()
     sys.exit(app.exec())
