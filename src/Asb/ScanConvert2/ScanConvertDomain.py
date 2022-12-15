@@ -206,7 +206,30 @@ class Page:
         
         if self.main_region.mode_algorithm != Algorithm.NONE:
             final_img = self._apply_algorithm(img, self.main_region.mode_algorithm)
+            
+        return self.apply_regions(final_img, img, target_resolution)
         
+    def apply_regions(self, final_img: Image, img: Image, target_resolution) -> Image:
+        
+        if len(self.sub_regions) == 0:
+            return final_img
+        
+        for region in self.sub_regions:
+            final_img = self.apply_region(region, final_img, img, target_resolution)
+    
+        return final_img
+    
+    def apply_region(self, region: Region, final_img: Image, img: Image, target_resolution) -> Image:
+        
+        region_img = img.crop((region.x, region.y, region.x2, region.y2))
+        region_img = self._apply_algorithm(region_img, region.mode_algorithm)
+        if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
+            final_img = final_img.convert("RGBA")
+        if region_img.mode == "RGB" and (final_img.mode == "L" or final_img.mode == "1"):
+            final_img = final_img.convert("RGB")
+        if region_img.mode == "L" and final_img.mode == "1":
+            final_img = final_img.convert("L")
+        final_img.paste(region_img, (region.x, region.y, region.x2, region.y2))
         return final_img
     
     def _change_resolution(self, img: Image, source_resolution: int, target_resolution: int) -> Image:
@@ -236,6 +259,8 @@ class Page:
 
     def _apply_algorithm(self, img: Image, algorithm: int) -> Image:
         
+        if algorithm == Algorithm.NONE:
+            return img
         if algorithm == Algorithm.GRAY:
             return self._apply_algorithm_gray(img)
         if algorithm == Algorithm.OTSU:
@@ -281,6 +306,8 @@ class Page:
         img.info['dpi'] = (resolution, resolution)
         img.convert("1")
         return img
+    
+    main_algorithm = property(lambda self: self.main_region.mode_algorithm)
 
 class Project(object):
     

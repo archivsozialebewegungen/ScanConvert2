@@ -110,7 +110,10 @@ class PdfService:
         pdf.setCreator('Scan-Convert')
         pdf.setTitle(os.path.basename(filebase))
         
+        page_counter = 0
         for page in project.pages:
+            page_counter += 1
+            print("Processing page %d" % page_counter)
             image = page.get_final_image(resolution)
             width_in_dots, height_in_dots = image.size
             

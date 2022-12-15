@@ -34,6 +34,7 @@ class OCRLine(object):
     def __init__(self):
         
         self.bbox = None
+        # TODO: We do not use the baseline coefficients. What do they describe?
         self.baseline_coefficients = ()
         self.font_size = None
         self.words = []
@@ -156,7 +157,8 @@ class OcrRunner(object):
         matcher = re.match(self.re_textangle, element.getAttribute("title"))
         if matcher:
             raise TextangleException("No baseline. Textangle: %d" % int(matcher.group(1)))
-        raise Exception("Malformed hocr")
+        return (0.0, 0.0)
+        #raise Exception("Malformed hocr")
 
     def _get_x_size(self, element: Element):
         

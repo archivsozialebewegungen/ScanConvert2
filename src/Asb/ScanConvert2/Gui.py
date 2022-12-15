@@ -213,62 +213,56 @@ class Window(QMainWindow):
         left_panel.addLayout(self._get_page_scroller())
         left_panel.addLayout(self._get_page_params_layout())
         left_panel.addLayout(self._get_region_scroller())
-        
+        left_panel.addLayout(self._get_region_params_layout())
         return left_panel
         
     def _get_page_params_layout(self):
         
         page_params = QVBoxLayout()
-        page_params.addWidget(self._get_algorithm_combobox())
+        self.main_algo_select = self._get_algorithm_combobox()
+        self.main_algo_select.currentIndexChanged.connect(self._main_algo_changed)
+        page_params.addWidget(self.main_algo_select)
         return page_params
+    
+    def _get_region_params_layout(self):
+
+        region_params = QVBoxLayout()
+        self.region_algo_select = self._get_algorithm_combobox()
+        self.region_algo_select.currentIndexChanged.connect(self._region_algo_changed)
+        region_params.addWidget(self.region_algo_select)
+        return region_params
     
     def _get_algorithm_combobox(self):
         
-        self.algo_select = QComboBox()
-        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.NONE])
-        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.GRAY])
-        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.OTSU])
-        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.SAUVOLA])
-        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.FLOYD_STEINBERG])
-        self.algo_select.currentIndexChanged.connect(self._algo_changed)
-        self.algo_select.setEnabled(False)
-        return self.algo_select
+        algo_select = QComboBox()
+        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.NONE])
+        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.GRAY])
+        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.OTSU])
+        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.SAUVOLA])
+        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.FLOYD_STEINBERG])
+        algo_select.setEnabled(False)
+        return algo_select
         
-    def _algo_changed(self):
+    def _main_algo_changed(self):
         
         if self.current_page_no is None:
             return
         combo_box = self.sender()
-        model = combo_box.model()
-        print(model)
         for value, text in ALGORITHM_TEXTS.items():
             if combo_box.currentText() == text:
                 self.project.pages[self.current_page_no-1].main_region.mode_algorithm = value
 
-    def _get_resolution_box(self):
+    def _region_algo_changed(self):
         
-        res_box = QGroupBox("Auflösungsänderung")
-        res_layout = QVBoxLayout()
-        res_layout_1 = QHBoxLayout()
-        resolution_group = QButtonGroup(self)
-        self.resolution_no = QRadioButton("keine", self)
-        self.resolution_300 = QRadioButton("300 dpi", self)
-        self.resolution_400 = QRadioButton("400 dpi", self)
-        self.resolution_no.setChecked(True)
-        res_layout_1.addWidget(self.resolution_no)
-        res_layout_1.addWidget(self.resolution_300)
-        res_layout_1.addWidget(self.resolution_400)
-        resolution_group.addButton(self.resolution_no)
-        resolution_group.addButton(self.resolution_300)
-        resolution_group.addButton(self.resolution_400)
-        res_layout.addLayout(res_layout_1)
-        self.correct_res_only_checkbox = QCheckBox("Auflösung nur korrigieren", self)
-        res_layout.addWidget(self.correct_res_only_checkbox)
-        res_box.setLayout(res_layout)
-        
-        return res_box
+        if self.current_page_no is None:
+            return
+        if self.current_region_no is None:
+            return
+        combo_box = self.sender()
+        for value, text in ALGORITHM_TEXTS.items():
+            if combo_box.currentText() == text:
+                self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1].mode_algorithm = value
 
-    
     def _get_right_panel(self):
 
         right_panel_layout = QVBoxLayout()
@@ -437,7 +431,9 @@ class Window(QMainWindow):
         """
         self.graphics_view.region_select = False
 
-        self.project.pages[self.current_page_no-1].sub_regions.append(self.graphics_view.get_selected_region())
+        new_region = self.graphics_view.get_selected_region()
+        new_region.mode_algorithm = self.project.pages[self.current_page_no-1].main_algorithm
+        self.project.pages[self.current_page_no-1].sub_regions.append(new_region)
         # TODO: Check if something is selected at all
         self.no_of_regions = len(self.project.pages[self.current_page_no-1].sub_regions)
         self.current_region_no = self.no_of_regions
@@ -480,6 +476,14 @@ class Window(QMainWindow):
         self.graphics_view.reset_rubberband()
         if self.no_of_regions > 0:
             self.graphics_view.show_region(self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1])
+            region = self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1]
+            self.region_algo_select.setEnabled(True)
+            for idx in range(0, self.main_algo_select.count()):
+                if self.region_algo_select.itemText(idx) == ALGORITHM_TEXTS[region.mode_algorithm]:
+                    self.region_algo_select.setCurrentIndex(idx)
+                    break
+        else:
+            self.region_algo_select.setEnabled(False)
 
     def show_page(self):
 
@@ -487,10 +491,10 @@ class Window(QMainWindow):
         self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
         self.graphics_view.set_page(page.get_base_image())
 
-        self.algo_select.setEnabled(True)
-        for idx in range(0, self.algo_select.count()):
-            if self.algo_select.itemText(idx) == ALGORITHM_TEXTS[page.main_region.mode_algorithm]:
-                self.algo_select.setCurrentIndex(idx)
+        self.main_algo_select.setEnabled(True)
+        for idx in range(0, self.main_algo_select.count()):
+            if self.main_algo_select.itemText(idx) == ALGORITHM_TEXTS[page.main_region.mode_algorithm]:
+                self.main_algo_select.setCurrentIndex(idx)
                 break
 
         self.reset_region()
