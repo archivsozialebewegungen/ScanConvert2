@@ -22,6 +22,13 @@ class Algorithm(Enum):
     OTSU=3
     SAUVOLA=4
     FLOYD_STEINBERG=5
+
+ALGORITHM_TEXTS = {
+    Algorithm.NONE: "Modus beibehalten",
+    Algorithm.GRAY: "Graustufen",
+    Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
+    Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
+    Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)"}
     
 class SortType(Enum):
     
@@ -145,10 +152,10 @@ class Scan(object):
             return Mode.BW
         if img.mode == "L":
             return Mode.GRAY
-        if img.mode == "RGB":
+        if img.mode == "RGB" or img.mode == "RGBA":
             return Mode.COLOR
         
-        raise UnknownImageMode()
+        raise UnknownImageMode(img.mode)
     
 class Page:
     '''

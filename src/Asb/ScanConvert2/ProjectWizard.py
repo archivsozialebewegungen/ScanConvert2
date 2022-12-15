@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QVBoxLayout, QLabel, QRadioButton, QCheckBox, \
     QHBoxLayout, QPushButton, QWizard
 
 from Asb.ScanConvert2.ScanConvertDomain import Scannertype, Scan, Projecttype, \
-    Scantype, SortType, Algorithm
+    Scantype, SortType, Algorithm, ALGORITHM_TEXTS
 
 PDF_ALGORITHM_PAGE=6
 SINGLE_SORT_TYPE_PAGE = 3
@@ -136,11 +136,11 @@ class ProjectWizardPageAlgorithmType(AbstractRadioButtonProjectWizardPage):
                          "Hier kann der Standard-Algorithmus gewählt werden.",
             'Algorithmus auswählen:',
             {
-            "Keine Änderung": Algorithm.NONE,
-            "Graustufen": Algorithm.GRAY,
-            'SW Otsu (optimale Schwellwert)': Algorithm.OTSU,
-            'SW Sauvola (lokale Schwellwerte)': Algorithm.SAUVOLA,
-            'SW Floyd-Steinberg (Bildrasterung)': Algorithm.FLOYD_STEINBERG
+            ALGORITHM_TEXTS[Algorithm.NONE]: Algorithm.NONE,
+            ALGORITHM_TEXTS[Algorithm.GRAY]: Algorithm.GRAY,
+            ALGORITHM_TEXTS[Algorithm.OTSU]: Algorithm.OTSU,
+            ALGORITHM_TEXTS[Algorithm.SAUVOLA]: Algorithm.SAUVOLA,
+            ALGORITHM_TEXTS[Algorithm.FLOYD_STEINBERG]: Algorithm.FLOYD_STEINBERG
             }
             )
 

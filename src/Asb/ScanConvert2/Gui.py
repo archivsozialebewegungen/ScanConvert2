@@ -14,12 +14,12 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
     QWidget, QGraphicsView, QApplication, QFrame, QGroupBox, QButtonGroup,\
-    QRadioButton, QCheckBox
+    QRadioButton, QCheckBox, QComboBox
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region
+    Region, ALGORITHM_TEXTS, Algorithm
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 
 
@@ -219,8 +219,31 @@ class Window(QMainWindow):
     def _get_page_params_layout(self):
         
         page_params = QVBoxLayout()
-        page_params.addWidget(self._get_resolution_box())
+        page_params.addWidget(self._get_algorithm_combobox())
         return page_params
+    
+    def _get_algorithm_combobox(self):
+        
+        self.algo_select = QComboBox()
+        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.NONE])
+        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.GRAY])
+        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.OTSU])
+        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.SAUVOLA])
+        self.algo_select.addItem(ALGORITHM_TEXTS[Algorithm.FLOYD_STEINBERG])
+        self.algo_select.currentIndexChanged.connect(self._algo_changed)
+        self.algo_select.setEnabled(False)
+        return self.algo_select
+        
+    def _algo_changed(self):
+        
+        if self.current_page_no is None:
+            return
+        combo_box = self.sender()
+        model = combo_box.model()
+        print(model)
+        for value, text in ALGORITHM_TEXTS.items():
+            if combo_box.currentText() == text:
+                self.project.pages[self.current_page_no-1].main_region.mode_algorithm = value
 
     def _get_resolution_box(self):
         
@@ -283,12 +306,19 @@ class Window(QMainWindow):
         load_action.setStatusTip('Projekt laden')
         load_action.triggered.connect(self._load_project)
 
+        pdf_export_action = QAction(QIcon('file.png'), '&Pdf exportieren', self)
+        pdf_export_action.setShortcut('Ctrl+P')
+        pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
+        pdf_export_action.triggered.connect(self._export_pdf)
+
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
         fileMenu.addAction(new_project_action)
         fileMenu.addAction(save_action)
         fileMenu.addAction(load_action)
         fileMenu.addAction(exit_action)
+        exportMenu = menubar.addMenu("&Export")
+        exportMenu.addAction(pdf_export_action)
         
     def _save_project(self):
         
@@ -302,6 +332,10 @@ class Window(QMainWindow):
         project = pickle.load(file)
         file.close()
         self._init_from_project(project)
+        
+    def _export_pdf(self):
+        
+        self.project_service.export_pdf(self.project, "/tmp/test.pdf")
         
     def _get_page_scroller(self):
         
@@ -449,8 +483,15 @@ class Window(QMainWindow):
 
     def show_page(self):
 
+        page = self.project.pages[self.current_page_no-1]
         self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
-        self.graphics_view.set_page(self.project.pages[self.current_page_no-1].get_base_image())
+        self.graphics_view.set_page(page.get_base_image())
+
+        self.algo_select.setEnabled(True)
+        for idx in range(0, self.algo_select.count()):
+            if self.algo_select.itemText(idx) == ALGORITHM_TEXTS[page.main_region.mode_algorithm]:
+                self.algo_select.setCurrentIndex(idx)
+                break
 
         self.reset_region()
         

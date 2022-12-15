@@ -180,12 +180,11 @@ class PageSorter():
         if sort_type == SortType.SINGLE_ALL_FRONT_ALL_BACK:
             if len(pages) % 2 != 0:
                 raise("Ungleiche Anzahl Vorder- und Rückseiten")
-            sorted = []
+            sorted_pages = []
             for i in range(0, int(len(pages) / 2)):
-                sorted.append(pages[i])
-            for i in range(0, int(len(pages) / 2)):
-                sorted.append(pages[(-1*i)-1])
-            return sorted
+                sorted_pages.append(pages[i])
+                sorted_pages.append(pages[(-1*i)-1])
+            return sorted_pages
         
         raise("Diese Sortierung ist noch nicht implementiert!")
     

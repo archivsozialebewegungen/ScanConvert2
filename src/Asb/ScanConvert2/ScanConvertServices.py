@@ -50,6 +50,7 @@ class OCRService(object):
     
     def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
 
+        
         text = pdf.beginText()
         
         text.setTextRenderMode(INVISIBLE)
@@ -69,8 +70,10 @@ class OCRService(object):
 
         # Text an bounding box anpassen
         text_width = pdf.stringWidth(word.text, 'Times-Roman', line.font_size)
-        bbox_width = (word.bbox[2] - word.bbox[0]) * 72.0 / page.dpi
-        text.setHorizScale(100.0 * bbox_width / text_width)
+        if text_width != 0:
+            text_width = pdf.stringWidth(word.text, 'Times-Roman', line.font_size)
+            bbox_width = (word.bbox[2] - word.bbox[0]) * 72.0 / page.dpi
+            text.setHorizScale(100.0 * bbox_width / text_width)
         
         text.textLine(word.text)
 
@@ -99,12 +102,13 @@ class PdfService:
         self.ocr_service = ocr_service
         self.run_ocr = True
     
-    def create_pdf_file(self, project: Project, resolution: int = 300):
+    def create_pdf_file(self, project: Project, filebase: str, resolution: int = 300):
         
    
-        pdf = Canvas(self._get_file_name(project.filebase), pageCompression=1)
+   
+        pdf = Canvas(self._get_file_name(filebase), pageCompression=1)
         pdf.setCreator('Scan-Convert')
-        pdf.setTitle(os.path.basename(project.filebase))
+        pdf.setTitle(os.path.basename(filebase))
         
         for page in project.pages:
             image = page.get_final_image(resolution)
@@ -167,6 +171,10 @@ class ProjectService(object):
                     rotation_alternating,
                     pdf_algorithm)
 
+    def export_pdf(self, project: Project, filename: str):
+        
+        self.pdf_service.create_pdf_file(project, filename)
+        
     def run_project(self, project: Project):
         
         if project.projecttype == Projecttype.PDF:
