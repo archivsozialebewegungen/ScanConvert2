@@ -13,8 +13,7 @@ from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QFrame, QGroupBox, QButtonGroup,\
-    QRadioButton, QCheckBox, QComboBox
+    QWidget, QGraphicsView, QApplication, QComboBox
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard

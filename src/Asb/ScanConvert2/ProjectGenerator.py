@@ -114,8 +114,8 @@ class DoublePagesGenerator(BasePageGenerator):
                 pages.append(self._get_left(scan, 0))
                 pages.append(self._get_right(scan, 0))
             else:
-                pages.append(self._get_right(scan), 180)
-                pages.append(self._get_left(scan), 180)
+                pages.append(self._get_right(scan, 180))
+                pages.append(self._get_left(scan, 180))
             if alternating:
                 next_rotation = self.alternating_rotation[next_rotation]
         return pages
@@ -126,11 +126,11 @@ class DoublePagesGenerator(BasePageGenerator):
         pages = []
         for scan in scans:
             if next_rotation == 90:
-                pages.append(self._get_top(scan, 90))
                 pages.append(self._get_bottom(scan, 90))
+                pages.append(self._get_top(scan, 90))
             else:
-                pages.append(self._get_bottom(scan, 270))
                 pages.append(self._get_top(scan, 270))
+                pages.append(self._get_bottom(scan, 270))
             if alternating:
                 next_rotation = self.alternating_rotation[next_rotation]
         return pages
@@ -156,11 +156,11 @@ class DoublePagesGenerator(BasePageGenerator):
         pages = []
         for scan in scans:
             if next_rotation == 270:
-                pages.append(self._get_bottom(scan, 270))
                 pages.append(self._get_top(scan, 270))
+                pages.append(self._get_bottom(scan, 270))
             else:
-                pages.append(self._get_top(scan), 90)
-                pages.append(self._get_bottom(scan), 90)
+                pages.append(self._get_bottom(scan, 90))
+                pages.append(self._get_top(scan, 90))
             if alternating:
                 next_rotation = self.alternating_rotation[next_rotation]
         return pages

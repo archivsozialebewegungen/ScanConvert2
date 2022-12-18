@@ -14,7 +14,7 @@ from reportlab.pdfgen.canvas import Canvas
 
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ScanConvertDomain import Project, Algorithm, \
-    Projecttype, SortType
+    SortType
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
 
 
@@ -177,15 +177,3 @@ class ProjectService(object):
     def export_pdf(self, project: Project, filename: str):
         
         self.pdf_service.create_pdf_file(project, filename)
-        
-    def run_project(self, project: Project):
-        
-        if project.projecttype == Projecttype.PDF:
-            self.pdf_service.create_pdf_file(project)   
-        elif project.projecttype == Projecttype.TIFF:
-            self.tiff_service.create_tiff_files(project)
-        elif project.projecttype == Projecttype.BOTH:
-            self.pdf_service.create_pdf_file(project)   
-            self.tiff_service.create_tiff_files(project)
-        else:
-            raise Exception("Unknown project type %s" % project.projecttype)

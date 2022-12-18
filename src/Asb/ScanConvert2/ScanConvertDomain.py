@@ -5,8 +5,9 @@ Created on 01.11.2022
 '''
 from PIL import Image
 from enum import Enum
-from numpy import asarray
+import numpy as np
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
+import cv2
 
 
 class Mode(Enum):
@@ -22,13 +23,15 @@ class Algorithm(Enum):
     OTSU=3
     SAUVOLA=4
     FLOYD_STEINBERG=5
+    QUANTIZATION=6
 
 ALGORITHM_TEXTS = {
     Algorithm.NONE: "Modus beibehalten",
     Algorithm.GRAY: "Graustufen",
     Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
     Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
-    Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)"}
+    Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
+    Algorithm.QUANTIZATION: "Farbiges Papier"}
     
 class SortType(Enum):
     
@@ -53,12 +56,6 @@ class Scannertype(Enum):
     FLATBED=2
     FEEDER_SIMPLEX=3
     FEEDER_DUPLEX=4
-
-class Projecttype(Enum):
-    
-    TIFF=1
-    PDF=2
-    BOTH=3
 
 class MissingResolutionInfo(Exception):
     
@@ -269,6 +266,8 @@ class Page:
             return self._apply_threshold_algorithm(img, Algorithm.SAUVOLA)
         if algorithm == Algorithm.FLOYD_STEINBERG:
             return self._apply_algorithm_floyd_steinberg(img)
+        if algorithm == Algorithm.QUANTIZATION:
+            return self._apply_quantization_algorithm(img)
         raise Exception("Unknown Algorithm.")
     
     def _apply_algorithm_gray(self, img: Image):
@@ -294,7 +293,7 @@ class Page:
     def _apply_threshold_algorithm(self, img: Image, algorithm: Algorithm):
 
         resolution = get_image_resolution(img)
-        in_array = asarray(self._apply_algorithm_gray(img))
+        in_array = np.asarray(self._apply_algorithm_gray(img))
         if algorithm == Algorithm.OTSU:
             mask = threshold_otsu(in_array)
         elif algorithm == Algorithm.SAUVOLA:
@@ -306,6 +305,23 @@ class Page:
         img.info['dpi'] = (resolution, resolution)
         img.convert("1")
         return img
+    
+    def _apply_quantization_algorithm(self, img: Image) -> Image:
+        """
+        Uses the k-means algorithm to quantize the image
+        """
+        
+        np_array = np.array(img)
+        flattend = np.float32(np_array).reshape(-1,3)
+        condition = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
+        ret,label,center = cv2.kmeans(flattend, 2 , None, condition,10,cv2.KMEANS_RANDOM_CENTERS)
+        center = np.uint8(center)
+        final_flattend = center[label.flatten()]
+        final_img_array = final_flattend.reshape(np_array.shape)
+        new_img = Image.fromarray(final_img_array)
+        new_img.info['dpi'] = img.info['dpi']
+        return new_img
+
     
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
 
