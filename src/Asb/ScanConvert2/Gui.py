@@ -41,7 +41,6 @@ class PageView(QGraphicsView):
     def set_page(self, img: Image):
 
         self.img = img
-        print("Bildgröße: %d x %d" % (img.width, img.height))
         pixmap = QPixmap(ImageQt(self.img))
         self.scene = QGraphicsScene()
         self.scene.addPixmap(pixmap)
@@ -234,12 +233,8 @@ class Window(QMainWindow):
     def _get_algorithm_combobox(self):
         
         algo_select = QComboBox()
-        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.NONE])
-        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.GRAY])
-        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.OTSU])
-        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.SAUVOLA])
-        algo_select.addItem(ALGORITHM_TEXTS[Algorithm.FLOYD_STEINBERG])
-        algo_select.setEnabled(False)
+        for algo, algo_text in ALGORITHM_TEXTS.items():
+            algo_select.addItem(algo_text)
         return algo_select
         
     def _main_algo_changed(self):

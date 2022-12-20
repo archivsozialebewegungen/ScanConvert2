@@ -23,17 +23,15 @@ class SortDetector:
         return False
 
 class BasePageGenerator(object):
-    
-    def __init__(self):
-        
-        self.alternating_rotation = {
+
+    alternating_rotation = {
             0: 180,
             90: 270,
             180: 0,
             270: 90,
         }
             
-        self.page_rotation = {
+    page_rotation = {
             0: 0,
             90: 270,
             180: 180,
@@ -186,6 +184,15 @@ class PageSorter():
                 sorted_pages.append(pages[(-1*i)-1])
             return sorted_pages
         
+        if sort_type == SortType.SHEET_ALL_FRONT_ALL_BACK:
+            if len(pages) % 4 != 0:
+                raise("Keine korrekte Seitenzahl für Bogensortierung")
+            sorted_pages = []
+            for i in range(0, int(len(pages) / 2)):
+                sorted_pages.append(pages[(i*2)+1])
+                sorted_pages.append(pages[len(pages)-(i*2)-2])
+            return sorted_pages
+        
         raise("Diese Sortierung ist noch nicht implementiert!")
     
 @singleton
@@ -215,9 +222,10 @@ class ProjectGenerator():
             pages = self._generate_single_pages(scans, scan_rotation, rotation_alternating)
         else:
             is_mixed = sort_type == SortType.STRAIGHT and self.sort_detector._is_mixed(scans)
-            if not is_mixed:
+            if sort_type == SortType.STRAIGHT and not is_mixed:
                 sort_type = SortType.STRAIGHT_DOUBLE
-            pages = self._generate_double_pages(scans, scan_rotation, rotation_alternating, is_mixed)
+            else:
+                pages = self._generate_double_pages(scans, scan_rotation, rotation_alternating, is_mixed)
         
         if pdf_algorithm != Algorithm.NONE:
             for page in pages:

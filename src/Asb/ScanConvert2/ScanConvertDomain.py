@@ -24,6 +24,7 @@ class Algorithm(Enum):
     SAUVOLA=4
     FLOYD_STEINBERG=5
     QUANTIZATION=6
+    BW_QUANTIZATION=7
 
 ALGORITHM_TEXTS = {
     Algorithm.NONE: "Modus beibehalten",
@@ -31,7 +32,8 @@ ALGORITHM_TEXTS = {
     Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
     Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
     Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
-    Algorithm.QUANTIZATION: "Farbiges Papier"}
+    Algorithm.QUANTIZATION: "Farbiges Papier",
+    Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen"}
     
 class SortType(Enum):
     
@@ -100,7 +102,6 @@ class Region(object):
 
     def __init__(self, x: int, y: int, width: int, height: int, mode_algorithm: Algorithm=Algorithm.NONE):
 
-        print("x: %d y: %d with: %d height: %d" % (x, y, width, height))
         self.x = x
         self.y = y
         self.width = width
@@ -267,7 +268,9 @@ class Page:
         if algorithm == Algorithm.FLOYD_STEINBERG:
             return self._apply_algorithm_floyd_steinberg(img)
         if algorithm == Algorithm.QUANTIZATION:
-            return self._apply_quantization_algorithm(img)
+            return self._apply_algorithm_quantization(img)
+        if algorithm == Algorithm.BW_QUANTIZATION:
+            return self._apply_algorithm_bw_quantization(img)
         raise Exception("Unknown Algorithm.")
     
     def _apply_algorithm_gray(self, img: Image):
@@ -297,7 +300,7 @@ class Page:
         if algorithm == Algorithm.OTSU:
             mask = threshold_otsu(in_array)
         elif algorithm == Algorithm.SAUVOLA:
-            mask = threshold_sauvola(in_array)
+            mask = threshold_sauvola(in_array, window_size=11)
         else:
             raise Exception("Unknown threshold algorithm")
         out_array = in_array > mask
@@ -306,7 +309,7 @@ class Page:
         img.convert("1")
         return img
     
-    def _apply_quantization_algorithm(self, img: Image) -> Image:
+    def _apply_algorithm_quantization(self, img: Image) -> Image:
         """
         Uses the k-means algorithm to quantize the image
         """
@@ -321,7 +324,34 @@ class Page:
         new_img = Image.fromarray(final_img_array)
         new_img.info['dpi'] = img.info['dpi']
         return new_img
+    
+    def _apply_algorithm_bw_quantization(self, img: Image):
+        
+        quantized_img = self._apply_algorithm_quantization(img)
+        colors = quantized_img.getcolors()
+        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
+        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
+        if sum1 < sum0:
+            white = colors[0][1] 
+            black = colors[1][1]
+        else: 
+            white = colors[1][1] 
+            black = colors[0][1]
+        
+        assert(quantized_img.mode == "RGB")
+        np_img = np.array(quantized_img)   # "data" is a height x width x 4 numpy array
+        red, green, blue = np_img.T # Temporarily unpack the bands for readability
 
+        # Replace white with red... (leaves alpha values alone...)
+        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
+        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
+        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
+        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
+
+        final_img = Image.fromarray(np_img)
+        final_img.info['dpi'] = img.info['dpi']
+        
+        return final_img.convert("1")
     
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
 

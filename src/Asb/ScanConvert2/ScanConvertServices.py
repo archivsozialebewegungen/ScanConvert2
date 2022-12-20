@@ -167,6 +167,7 @@ class ProjectService(object):
                     rotation_alternating: bool,
                     pdf_algorithm: Algorithm) -> Project:
 
+        print("Scan rotation is now: %d" % scan_rotation)
         return self.project_generator.scans_to_project(scans,
                     pages_per_scan,
                     sort_type,

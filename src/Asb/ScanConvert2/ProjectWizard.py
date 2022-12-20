@@ -29,7 +29,7 @@ class ExpertProjectWizard(QWizard):
         self.pages = {
             PAGE_PER_SCAN_PAGE: ProjectWizardPagePagesPerScan(self),
             SCANS_PAGE: ProjectWizardPageScans(self),
-            SCAN_ROTATION_PAGE: ProjectWizardPageRotation(self),
+            SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self),
             SINGLE_SORT_TYPE_PAGE: ProjectWizardPageSingleSortType(self),
             DOUBLE_SORT_TYPE_PAGE: ProjectWizardPageDoubleSortType(self),
             PDF_ALGORITHM_PAGE: ProjectWizardPageAlgorithmType(self)
@@ -68,7 +68,7 @@ class SimpleProjectWizard(QWizard):
             self.SCANNER_TYPE_PAGE: ProjectWizardPageScannerType(self),
             self.PAGE_PER_SCAN_PAGE: ProjectWizardPagePagesPerScan(self),
             self.SCANS_PAGE: ProjectWizardPageScans(self),
-            self.SCAN_ROTATION_PAGE: ProjectWizardPageRotation(self)
+            self.SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self)
             }
         for page_id in self.pages.keys():
             self.setPage(page_id, self.pages[page_id])
@@ -124,7 +124,9 @@ class AbstractRadioButtonProjectWizardPage(QWizardPage):
     def on_click(self):
 
         radiobutton = self.sender()
-        self.result = self.buttons[radiobutton.text()]        
+        print("Radio button text: %s" % radiobutton.text())
+        self.result = self.buttons[radiobutton.text()]
+        print("Result value: %s" % self.result)        
 
 
 class ProjectWizardPageAlgorithmType(AbstractRadioButtonProjectWizardPage):
@@ -217,7 +219,7 @@ class ProjectWizardPageScannerType(AbstractRadioButtonProjectWizardPage):
                 "Einzug (Simplex)": Scannertype.FEEDER_SIMPLEX
             })
 
-class ProjectWizardPageRotation(AbstractRadioButtonProjectWizardPage):
+class ProjectWizardScanRotation(AbstractRadioButtonProjectWizardPage):
     
     def __init__(self, parent):
         
