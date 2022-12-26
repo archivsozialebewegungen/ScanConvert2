@@ -25,6 +25,7 @@ class Algorithm(Enum):
     FLOYD_STEINBERG=5
     QUANTIZATION=6
     BW_QUANTIZATION=7
+    COLOR_TEXT_QUANTIZATION=8
 
 ALGORITHM_TEXTS = {
     Algorithm.NONE: "Modus beibehalten",
@@ -33,7 +34,8 @@ ALGORITHM_TEXTS = {
     Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
     Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
     Algorithm.QUANTIZATION: "Farbiges Papier",
-    Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen"}
+    Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen",
+    Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund"}
     
 class SortType(Enum):
     
@@ -82,7 +84,7 @@ class UpscalingError(Exception):
 def get_image_resolution(img: Image) -> int:
         
     if not 'dpi' in img.info:
-        raise MissingResolutionInfo()
+        return 72
         
     xres, yres = img.info['dpi']
     if xres == 1 or yres == 1:
@@ -188,7 +190,8 @@ class Page:
     def get_base_image(self, target_resolution=300) -> Image:
         
         if target_resolution > self.scan.resolution:
-            raise UpscalingError()
+            pass
+            #raise UpscalingError()
         
         img = Image.open(self.scan.filename)
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
@@ -271,6 +274,8 @@ class Page:
             return self._apply_algorithm_quantization(img)
         if algorithm == Algorithm.BW_QUANTIZATION:
             return self._apply_algorithm_bw_quantization(img)
+        if algorithm == Algorithm.COLOR_TEXT_QUANTIZATION:
+            return self._apply_algorithm_color_text_quantization(img)
         raise Exception("Unknown Algorithm.")
     
     def _apply_algorithm_gray(self, img: Image):
@@ -314,6 +319,7 @@ class Page:
         Uses the k-means algorithm to quantize the image
         """
         
+        assert(img.mode == "RGB")
         np_array = np.array(img)
         flattend = np.float32(np_array).reshape(-1,3)
         condition = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
@@ -353,6 +359,33 @@ class Page:
         
         return final_img.convert("1")
     
+    def _apply_algorithm_color_text_quantization(self, img: Image):
+        
+        quantized_img = self._apply_algorithm_quantization(img)
+        colors = quantized_img.getcolors()
+        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
+        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
+        if sum1 < sum0:
+            white = colors[0][1] 
+        else: 
+            white = colors[1][1] 
+        
+        assert(quantized_img.mode == "RGB")
+        np_img = np.array(quantized_img)   # "data" is a height x width x 4 numpy array
+        red, green, blue = np_img.T # Temporarily unpack the bands for readability
+
+        # Replace white with red... (leaves alpha values alone...)
+        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
+        print("Ersetze fast weiß durch weiß")
+        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
+
+        final_img = Image.fromarray(np_img)
+        final_img.info['dpi'] = img.info['dpi']
+        
+        print("Mode: " + final_img.mode)
+        
+        return final_img
+
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
 
 class Project(object):
