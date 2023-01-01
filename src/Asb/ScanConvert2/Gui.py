@@ -13,13 +13,14 @@ from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QComboBox
+    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region, ALGORITHM_TEXTS, Algorithm
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
+from Asb.ScanConvert2.TaskRunner import ExportTarget, TaskManager, JobDefinition
 
 
 CREATE_REGION = "Region anlegen"
@@ -173,7 +174,7 @@ class Window(QMainWindow):
     
 
     @inject
-    def __init__(self, project_service: ProjectService):
+    def __init__(self, project_service: ProjectService, task_manager: TaskManager):
 
         super().__init__()
         
@@ -183,10 +184,15 @@ class Window(QMainWindow):
         self.no_of_regions = 0
         
         self.project_service = project_service
+        self.task_manager = task_manager
+        self.task_manager.message_function = self.show_job_status
+        
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
         self._create_widgets()
         self.project = None
+        
+        self.task_manager.message_function()
     
     def _create_widgets(self):
 
@@ -208,10 +214,29 @@ class Window(QMainWindow):
     def _get_left_panel(self):
         
         left_panel = QVBoxLayout()
+        
+        label = QLabel("<b>Seiteneinstellungen</b>")
+        left_panel.addWidget(label)
+        label = QLabel("Navigation:")
+        left_panel.addWidget(label)
         left_panel.addLayout(self._get_page_scroller())
+        label = QLabel("Algorithmus:")
+        left_panel.addWidget(label)
         left_panel.addLayout(self._get_page_params_layout())
+        
+        label = QLabel("<b>Regioneneinstellungen</b>")
+        left_panel.addWidget(label)
+        label = QLabel("Navigation:")
+        left_panel.addWidget(label)
         left_panel.addLayout(self._get_region_scroller())
+        label = QLabel("Algorithmus:")
+        left_panel.addWidget(label)
         left_panel.addLayout(self._get_region_params_layout())
+        
+        self.task_label = QLabel("Nicht initalisiert")
+        left_panel.addWidget(self.task_label)
+        
+        left_panel.addStretch(10)
         return left_panel
         
     def _get_page_params_layout(self):
@@ -310,21 +335,33 @@ class Window(QMainWindow):
         
     def _save_project(self):
         
-        file = open("/tmp/project.pkl", "wb")
+        file = open("/tmp/project.scp", "wb")
         pickle.dump(self.project, file)
         file.close()
     
     def _load_project(self):
         
-        file = open("/tmp/project.pkl", "rb")
+        file = open("/tmp/project.scp", "rb")
         project = pickle.load(file)
         file.close()
         self._init_from_project(project)
         
     def _export_pdf(self):
         
-        self.project_service.export_pdf(self.project, "/tmp/test.pdf")
+        file_base = QFileDialog.getSaveFileName(parent=self,
+                                                caption="Pdf-Datei für das Speichern angeben",
+                                                filter="Pdf-Dateien (*.pdf)")
+
+        if file_base[0] != "":
+            job = JobDefinition(self.project, file_base[0], ExportTarget.PDF_EXPORT)
+            self.task_manager.add_task(job)
+            
+    def show_job_status(self):
         
+        total = len(self.task_manager.finished_tasks) + len(self.task_manager.unfinished_tasks)
+        unfinished = len(self.task_manager.unfinished_tasks)
+        self.task_label.setText("<b>Status:</b><br/>Unvollendete Aufgaben: %d<br/>Aufgaben ingesamt: %d" % (unfinished, total))
+                    
     def _get_page_scroller(self):
         
         page_scroller = QHBoxLayout()
@@ -503,6 +540,7 @@ class Window(QMainWindow):
                                                           wizard.scan_rotation,
                                                           wizard.rotation_alternating,
                                                           wizard.pdf_algorithm)
+            project.metadata = wizard.metadata
             self._init_from_project(project)
         
     def _init_from_project(self, project: Project):

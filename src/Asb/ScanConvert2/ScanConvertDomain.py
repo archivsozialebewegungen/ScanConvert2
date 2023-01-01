@@ -3,7 +3,7 @@ Created on 01.11.2022
 
 @author: michael
 '''
-from PIL import Image
+from PIL import Image, ImageFilter
 from enum import Enum
 import numpy as np
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
@@ -20,16 +20,18 @@ class Algorithm(Enum):
 
     NONE=1
     GRAY=2
-    OTSU=3
-    SAUVOLA=4
-    FLOYD_STEINBERG=5
-    QUANTIZATION=6
-    BW_QUANTIZATION=7
-    COLOR_TEXT_QUANTIZATION=8
+    GRAY_WHITE=3
+    OTSU=4
+    SAUVOLA=5
+    FLOYD_STEINBERG=6
+    QUANTIZATION=7
+    BW_QUANTIZATION=8
+    COLOR_TEXT_QUANTIZATION=9
 
 ALGORITHM_TEXTS = {
     Algorithm.NONE: "Modus beibehalten",
     Algorithm.GRAY: "Graustufen",
+    Algorithm.GRAY_WHITE: "Grau auf Weiß",
     Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
     Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
     Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
@@ -43,7 +45,6 @@ class SortType(Enum):
     SINGLE_ALL_FRONT_ALL_BACK=2
     SHEET=3
     SHEET_ALL_FRONT_ALL_BACK=4
-    STRAIGHT_DOUBLE=5
 
 class Scantype(Enum):
     
@@ -128,6 +129,7 @@ class Scan(object):
 
     def __init__(self, filename: str):
         
+        self.no_of_pages = 1
         self.filename = filename
         
         with Image.open(filename) as img:
@@ -264,6 +266,8 @@ class Page:
             return img
         if algorithm == Algorithm.GRAY:
             return self._apply_algorithm_gray(img)
+        if algorithm == Algorithm.GRAY_WHITE:
+            return self._apply_algorithm_gray_on_white_text(img)
         if algorithm == Algorithm.OTSU:
             return self._apply_threshold_algorithm(img, Algorithm.OTSU)
         if algorithm == Algorithm.SAUVOLA:
@@ -331,6 +335,24 @@ class Page:
         new_img.info['dpi'] = img.info['dpi']
         return new_img
     
+    def _apply_algorithm_gray_on_white_text(self, img: Image) -> Image:
+
+        mask = self._apply_algorithm_bw_quantization(img)
+        mask = mask.convert("RGB")
+        mask = mask.filter(ImageFilter.BLUR)
+
+        np_img = np.array(img)
+        np_mask = np.array(mask)
+        red, green, blue = np_mask.T
+
+        white_areas = (red == 255) & (green == 255) & (blue == 255)
+        np_img[white_areas.T] = (255, 255, 255)
+
+        final_img = Image.fromarray(np_img)
+        final_img.info['dpi'] = img.info['dpi']
+        
+        return final_img.convert("L")
+    
     def _apply_algorithm_bw_quantization(self, img: Image):
         
         quantized_img = self._apply_algorithm_quantization(img)
@@ -345,10 +367,9 @@ class Page:
             black = colors[0][1]
         
         assert(quantized_img.mode == "RGB")
-        np_img = np.array(quantized_img)   # "data" is a height x width x 4 numpy array
+        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
         red, green, blue = np_img.T # Temporarily unpack the bands for readability
 
-        # Replace white with red... (leaves alpha values alone...)
         white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
         np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
         black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
@@ -359,6 +380,7 @@ class Page:
         
         return final_img.convert("1")
     
+
     def _apply_algorithm_color_text_quantization(self, img: Image):
         
         quantized_img = self._apply_algorithm_quantization(img)
@@ -388,10 +410,19 @@ class Page:
 
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
 
+class MetaData(object):
+    
+    def __init__(self):
+        
+        self.title = ""
+        self.author = ""
+        self.subject = ""
+        self.keywords = ""
+
 class Project(object):
     
     def __init__(self,
                  pages: []):
 
         self.pages = pages
-        
+        self.metadata = MetaData()

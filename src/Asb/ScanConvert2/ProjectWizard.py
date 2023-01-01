@@ -7,12 +7,12 @@ import os
 
 from PySide6.QtWidgets import QVBoxLayout, QLabel, QRadioButton, QCheckBox, \
     QWizardPage, QAbstractItemView, QTableWidget, QTableWidgetItem, QFileDialog, \
-    QHBoxLayout, QPushButton, QWizard
+    QHBoxLayout, QPushButton, QWizard, QLineEdit, QPlainTextEdit
 
 from Asb.ScanConvert2.ScanConvertDomain import Scannertype, Scan, \
-    Scantype, SortType, Algorithm, ALGORITHM_TEXTS
+    Scantype, SortType, ALGORITHM_TEXTS, MetaData
 
-
+METADATA_PAGE=8
 PDF_ALGORITHM_PAGE=6
 SINGLE_SORT_TYPE_PAGE = 3
 DOUBLE_SORT_TYPE_PAGE = 4
@@ -32,7 +32,8 @@ class ExpertProjectWizard(QWizard):
             SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self),
             SINGLE_SORT_TYPE_PAGE: ProjectWizardPageSingleSortType(self),
             DOUBLE_SORT_TYPE_PAGE: ProjectWizardPageDoubleSortType(self),
-            PDF_ALGORITHM_PAGE: ProjectWizardPageAlgorithmType(self)
+            PDF_ALGORITHM_PAGE: ProjectWizardPageAlgorithmType(self),
+            METADATA_PAGE: ProjectWizardPageMetadata(self)
             }
         for page_id in self.pages.keys():
             self.setPage(page_id, self.pages[page_id])
@@ -52,6 +53,7 @@ class ExpertProjectWizard(QWizard):
     rotation_alternating = property(lambda self: self.pages[SCAN_ROTATION_PAGE].alternating)
     sort_type = property(_get_sort_type)
     pdf_algorithm = property(lambda self: self.pages[PDF_ALGORITHM_PAGE].result)
+    metadata = property(lambda self: self.pages[METADATA_PAGE].metadata)
     
 
 class SimpleProjectWizard(QWizard):
@@ -247,7 +249,6 @@ class ProjectWizardPageScans(QWizardPage):
         super().__init__(parent)
         self.wizard = parent
         
-        print(self.wizard)
         self.setTitle("Scans zum Projekt hinzufügen")
         self.setSubTitle("Die Scans müssen in der richtigen Reihenfolge angegeben werden. " + 
             "Das ist je nach Scannertyp unterschiedlich (siehe Handbuch).")
@@ -282,7 +283,7 @@ class ProjectWizardPageScans(QWizardPage):
 
     def add_files(self):
         
-        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.tif *.tiff *.gif *.png)")
+        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.jpeg *.tif *.tiff *.gif *.png)")
         for filename in filenames[0]:
             self.append_fileinfo(filename)
 
@@ -358,3 +359,55 @@ class ProjectWizardPageScans(QWizardPage):
         self.filename_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         
         return self.filename_table
+
+class ProjectWizardPageMetadata(QWizardPage):
+    
+    def __init__(self, parent):
+        
+        super().__init__(parent)
+        self.wizard = parent
+        
+        self.setTitle("Metadaten")
+        self.setSubTitle("Metadaten sind sehr wichtig, um das Dokument dauerhaft " +
+                         "identifierbar zu machen.")
+        
+        layout = QVBoxLayout()
+
+        title_layout = QHBoxLayout()
+        label = QLabel("Titel:")
+        title_layout.addWidget(label)
+        self.title_input = QLineEdit(self)
+        title_layout.addWidget(self.title_input)
+        layout.addLayout(title_layout)
+        
+        author_layout = QHBoxLayout()
+        label = QLabel("Autor:in:")
+        author_layout.addWidget(label)
+        self.author_input = QLineEdit(self)
+        author_layout.addWidget(self.author_input)
+        layout.addLayout(author_layout)
+        
+        keywords_layout = QHBoxLayout()
+        label = QLabel("Schlagworte:")
+        keywords_layout.addWidget(label)
+        self.keywords_input = QLineEdit(self)
+        keywords_layout.addWidget(self.keywords_input)
+        layout.addLayout(keywords_layout)
+        
+        label = QLabel("Beschreibung:")
+        layout.addWidget(label)
+        self.description_input = QPlainTextEdit(self)
+        layout.addWidget(self.description_input)
+
+        self.setLayout(layout)
+
+    def _get_metadata(self):
+        
+        metadata = MetaData()
+        metadata.title = self.title_input.text()
+        metadata.author = self.author_input.text()
+        metadata.keywords = self.keywords_input.text()
+        metadata.subject = self.description_input.toPlainText()
+        return metadata
+        
+    metadata = property(_get_metadata)

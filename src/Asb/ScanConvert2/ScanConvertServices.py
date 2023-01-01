@@ -107,8 +107,11 @@ class PdfService:
    
    
         pdf = Canvas(self._get_file_name(filebase), pageCompression=1)
-        pdf.setCreator('Scan-Convert')
-        pdf.setTitle(os.path.basename(filebase))
+        pdf.setAuthor(project.metadata.author)
+        pdf.setCreator('Scan-Convert 2')
+        pdf.setTitle(project.metadata.title)
+        pdf.setKeywords(project.metadata.keywords)
+        pdf.setSubject(project.metadata.subject)
         
         page_counter = 0
         for page in project.pages:
