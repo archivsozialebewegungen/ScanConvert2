@@ -3,8 +3,11 @@ Created on 06.11.2022
 
 @author: michael
 '''
+import os
 import pickle
+import shutil
 import sys
+import tempfile
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
@@ -18,7 +21,7 @@ from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, ALGORITHM_TEXTS, Algorithm
+    Region, ALGORITHM_TEXTS, Page
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from Asb.ScanConvert2.TaskRunner import ExportTarget, TaskManager, JobDefinition
 
@@ -170,11 +173,33 @@ class PageView(QGraphicsView):
     image_rectangle = property(lambda self: QRectF(0, 0, self.img.width, self.img.height))
 
 @singleton
+class FehPreviewer(object):
+    
+    def __init__(self):
+        
+        self.feh = shutil.which("feh")
+        
+    def show(self, page: Page):
+        
+        img = page.get_final_image()
+        tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
+        img.save(tmp_file, format="png")
+        os.system("%s %s" % (self.feh, tmp_file.name))
+        tmp_file.close()
+
+    def is_working(self):
+        
+        return self.feh is not None
+
+@singleton
 class Window(QMainWindow):
     
 
     @inject
-    def __init__(self, project_service: ProjectService, task_manager: TaskManager):
+    def __init__(self,
+                 project_service: ProjectService,
+                 task_manager: TaskManager,
+                 previewer: FehPreviewer):
 
         super().__init__()
         
@@ -186,6 +211,7 @@ class Window(QMainWindow):
         self.project_service = project_service
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
+        self.previewer = previewer
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -223,7 +249,11 @@ class Window(QMainWindow):
         label = QLabel("Algorithmus:")
         left_panel.addWidget(label)
         left_panel.addLayout(self._get_page_params_layout())
-        
+        if self.previewer.is_working():
+            preview_button = QPushButton("Vorschau")
+            preview_button.clicked.connect(self._show_current_page)
+            left_panel.addWidget(preview_button)
+            
         label = QLabel("<b>Regioneneinstellungen</b>")
         left_panel.addWidget(label)
         label = QLabel("Navigation:")
@@ -332,6 +362,10 @@ class Window(QMainWindow):
         fileMenu.addAction(exit_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
+    
+    def _show_current_page(self):
+        
+        self.previewer.show(self.project.pages[self.current_page_no-1])
         
     def _save_project(self):
         

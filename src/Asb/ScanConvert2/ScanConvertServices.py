@@ -4,7 +4,6 @@ Created on 02.11.2022
 @author: michael
 '''
 import io
-import os
 
 from PIL import Image
 from injector import singleton, inject

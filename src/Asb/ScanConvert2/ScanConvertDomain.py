@@ -323,7 +323,8 @@ class Page:
         Uses the k-means algorithm to quantize the image
         """
         
-        assert(img.mode == "RGB")
+        if img.mode != "RGB":
+            img = img.convert("RGB")
         np_array = np.array(img)
         flattend = np.float32(np_array).reshape(-1,3)
         condition = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
@@ -336,6 +337,9 @@ class Page:
         return new_img
     
     def _apply_algorithm_gray_on_white_text(self, img: Image) -> Image:
+
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
         mask = self._apply_algorithm_bw_quantization(img)
         mask = mask.convert("RGB")
@@ -398,13 +402,10 @@ class Page:
 
         # Replace white with red... (leaves alpha values alone...)
         white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
-        print("Ersetze fast weiß durch weiß")
         np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
 
         final_img = Image.fromarray(np_img)
         final_img.info['dpi'] = img.info['dpi']
-        
-        print("Mode: " + final_img.mode)
         
         return final_img
 
