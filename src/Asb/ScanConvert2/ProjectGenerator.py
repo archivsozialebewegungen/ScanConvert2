@@ -213,6 +213,18 @@ class PageSorter():
                 sorted_pages.append(pages[len(pages)-(i*2)-2])
             return sorted_pages
         
+        if sort_type == SortType.SHEET:
+            if len(pages) % 4 != 0:
+                raise("Keine korrekte Seitenzahl für Bogensortierung")
+            sorted_pages = []
+            for i in range(0, int(len(pages) / 4)):
+                sorted_pages.append(pages[(i*4)+1])
+                sorted_pages.append(pages[(i*4)+2])
+            for i in range(0, int(len(pages) / 4)):
+                sorted_pages.append(pages[len(pages)-(i*4)-1])
+                sorted_pages.append(pages[len(pages)-(i*4)-4])
+            return sorted_pages
+
         raise("Diese Sortierung ist noch nicht implementiert!")
     
 @singleton
