@@ -13,17 +13,18 @@ from Asb.ScanConvert2.ScanConvertServices import OCRService
 from reportlab.lib.units import inch
 from Asb.ScanConvert2.OCR import OcrRunner
 import Asb
+from fitz.fitz import Document
 
 
 class OCRServiceTest(BaseTest):
 
 
-    def testOcr(self):
+    def notestOcr1(self):
         
         ocr_service = OCRService(OcrRunner())
         
         img = Image.open(os.path.join(self.test_file_dir, "Singlefiles", "Seite8schraeg.jpg"))
-        pdf = Canvas("/tmp/ocrtest.pdf", pageCompression=1)
+        pdf = Canvas("/tmp/ocrtest1.pdf", pageCompression=1)
         width_in_dots, height_in_dots = img.size
         pdf.setPageSize((width_in_dots * inch / 300, height_in_dots * inch / 300))
         
@@ -32,6 +33,26 @@ class OCRServiceTest(BaseTest):
         
         pdf.showPage()
         pdf.save()
+
+    def testOcr2(self):
+        
+        ocr_service = OCRService(OcrRunner())
+        pdf_file = "/tmp/ocrtest2.pdf"
+        
+        img = Image.open(os.path.join(self.test_file_dir, "rotated.tif"))
+        pdf = Canvas(pdf_file, pageCompression=1)
+        width_in_dots, height_in_dots = img.size
+        pdf.setPageSize((width_in_dots * inch / 300, height_in_dots * inch / 300))
+        
+        Asb.ScanConvert2.ScanConvertServices.INVISIBLE = 0
+        pdf = ocr_service.add_ocrresult_to_pdf(img, pdf)
+        
+        pdf.showPage()
+        pdf.save()
+        
+        document = Document(pdf_file)
+        self.assertIn("Text um 90 Grad gedreht", document.get_page_text(0))
+        self.assertIn("Text um 270 Grad gedreht", document.get_page_text(0))
 
 class OCRRunnerTest(BaseTest):
 

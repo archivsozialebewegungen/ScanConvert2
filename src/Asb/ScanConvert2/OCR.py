@@ -9,10 +9,6 @@ from PIL import Image
 import pytesseract
 from xml.dom.minidom import parseString, Element, Node
 
-class TextangleException(Exception):
-    
-    pass
-
 class OCRPage(object):
     
     def __init__(self, dpi=300):
@@ -34,8 +30,8 @@ class OCRLine(object):
     def __init__(self):
         
         self.bbox = None
-        # TODO: We do not use the baseline coefficients. What do they describe?
-        self.baseline_coefficients = ()
+        self.baseline_coefficients = (1.0, 0.0)
+        self.textangle = 0
         self.font_size = None
         self.words = []
         
@@ -43,6 +39,7 @@ class OCRLine(object):
         
         string = "  Bounding box: %s %s %s %s" % self.bbox
         string += "\n  Baseline coefficients: %s %s" % self.baseline_coefficients
+        string += "\n  Textangle: %d" % self.textangle
         string += "\n  Font size: %s" % self.font_size
         for word in self.words:
             string += "\n%s" % word
@@ -101,13 +98,10 @@ class OcrRunner(object):
             line_data = OCRLine()
             line_data.font_size = round(self._get_x_size(line) * 72 / page.dpi)
             line_data.bbox = self._get_bounding_box(line)
-            try:
-                line_data.baseline_coefficients = self._get_baseline_coefficients(line)
-                line_data = self._add_words_to_line(line, line_data)
-                page.lines.append(line_data)
-            except TextangleException:
-                # TODO: Implement rotated text
-                print("Rotated text not yet implemented")
+            line_data.baseline_coefficients = self._get_baseline_coefficients(line)
+            line_data.textangle = self._get_textangle(line)
+            line_data = self._add_words_to_line(line, line_data)
+            page.lines.append(line_data)
 
         return page
     
@@ -154,11 +148,14 @@ class OcrRunner(object):
         matcher = re.match(self.re_baseline, element.getAttribute("title"))
         if matcher:
             return (float(matcher.group(1)), float(matcher.group(2)))
+        return (1.0, 0.0)
+
+    def _get_textangle(self, element: Element):
+        
         matcher = re.match(self.re_textangle, element.getAttribute("title"))
         if matcher:
-            raise TextangleException("No baseline. Textangle: %d" % int(matcher.group(1)))
-        return (0.0, 0.0)
-        #raise Exception("Malformed hocr")
+            return int(matcher.group(1))
+        return 0
 
     def _get_x_size(self, element: Element):
         

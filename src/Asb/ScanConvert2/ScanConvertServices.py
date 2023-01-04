@@ -15,10 +15,34 @@ from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ScanConvertDomain import Project, Algorithm, \
     SortType
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
+from reportlab.platypus.paragraph import Paragraph
 
 
 INVISIBLE = 3
 
+class VerticalParagraph(Paragraph):
+    """Paragraph that is printed vertically"""
+
+    def __init__(self, args, **kwargs):
+        super().__init__(args, **kwargs)
+        self.horizontal_position = -self.style.leading
+
+    def draw(self):
+        """ Draw text """
+        canvas = self.canv
+        canvas.rotate(90)
+        canvas.translate(1, self.horizontal_position)
+        super().draw()
+
+    def wrap(self, available_width, _):
+        """ Wrap text in table """
+        string_width = self.canv.stringWidth(
+            self.getPlainText(), self.style.fontName, self.style.fontSize
+        )
+        self.horizontal_position = - (available_width + self.style.leading) / 2
+        height, _ = super().wrap(availWidth=1 + string_width, availHeight=available_width)
+        return self.style.leading, height
+    
 @singleton
 class OCRService(object):
     '''
@@ -41,7 +65,8 @@ class OCRService(object):
         return pdf
     
     def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
-        
+
+            
         for word in line.words:
             pdf = self._write_word(word, pdf, line, page)
         
@@ -49,24 +74,13 @@ class OCRService(object):
     
     def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
 
+        text_origin = self._calculate_text_origin(word, line, page)
         
         text = pdf.beginText()
         
         text.setTextRenderMode(INVISIBLE)
         text.setFont('Times-Roman', line.font_size)
-        
-        text_origin_x = word.bbox[0] * 72.0 / page.dpi
-
-        # Wir nutzen die Baseline-Informationen von tesseract
-        # Die beiden Koeffizienten definieren eine lineare Gleichung für
-        # die Baseline der Zeile        
-        wortmittelpunkt_x_absolut = (word.bbox[0] + word.bbox[2]) / 2
-        wortmittelpunkt_x_relativ = wortmittelpunkt_x_absolut - line.bbox[0]
-        baseline_abweichung = wortmittelpunkt_x_relativ * line.baseline_coefficients[0] + line.baseline_coefficients[1]
-        text_origin_y = (page.height - line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
-        
-        text.setTextOrigin(text_origin_x, text_origin_y)
-
+        text.setTextOrigin(text_origin[0], text_origin[1])
         # Text an bounding box anpassen
         text_width = pdf.stringWidth(word.text, 'Times-Roman', line.font_size)
         if text_width != 0:
@@ -89,9 +103,27 @@ class OCRService(object):
         #    rotation_angle *= -1
 
         pdf.drawText(text)
-        
+                
         return pdf
 
+    def _calculate_text_origin(self, word, line, page):
+
+        offset = page.height
+        if line.textangle == 90:
+            offset = page.width
+        text_origin_x = word.bbox[0] * 72.0 / page.dpi
+        text_origin_y = offset - word.bbox[1] * 72.0 / page.dpi
+        if line.baseline_coefficients[0] != 1.0 and line.baseline_coefficients[1] != 0.0:
+            # Wir nutzen die Baseline-Informationen von tesseract
+            # Die beiden Koeffizienten definieren eine lineare Gleichung für
+            # die Baseline der Zeile        
+            wortmittelpunkt_x_absolut = (word.bbox[0] + word.bbox[2]) / 2
+            wortmittelpunkt_x_relativ = wortmittelpunkt_x_absolut - line.bbox[0]
+            baseline_abweichung = wortmittelpunkt_x_relativ * line.baseline_coefficients[0] + line.baseline_coefficients[1]
+            text_origin_y = (offset - line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
+        
+        return (text_origin_x, text_origin_y)
+        
 @singleton
 class PdfService:
     
