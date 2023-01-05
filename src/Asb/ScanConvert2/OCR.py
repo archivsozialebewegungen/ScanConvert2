@@ -79,8 +79,6 @@ class OcrRunner(object):
 
         hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang=lang)
         dom = parseString(hocr)
-        with open("/tmp/hocr.xml", "w") as file:
-            file.write(dom.toprettyxml(indent="  "))
         page = OCRPage(img.info['dpi'][0])
         page.width = img.size[0]
         page.height = img.size[1]
@@ -92,24 +90,26 @@ class OcrRunner(object):
             page = self._add_lines_to_page(paragraph, page)
         return page
     
-    def _add_lines_to_page(self, paragraph: Element, page: OCRPage) -> OCRPage:
+    def _add_lines_to_page(self, paragraph: Element, page_data: OCRPage) -> OCRPage:
         
         for line in self._get_lines(paragraph):
             line_data = OCRLine()
-            line_data.font_size = round(self._get_x_size(line) * 72 / page.dpi)
-            line_data.bbox = self._get_bounding_box(line)
+            line_data.font_size = round(self._get_x_size(line) * 72 / page_data.dpi)
+            line_data.bbox = self._get_bounding_box(line, page_data)
             line_data.baseline_coefficients = self._get_baseline_coefficients(line)
             line_data.textangle = self._get_textangle(line)
-            line_data = self._add_words_to_line(line, line_data)
-            page.lines.append(line_data)
+            print("Textangle: %d" % line_data.textangle)
+            assert(line_data.textangle == 90 or line_data.textangle == 0) # No other angles implemented
+            line_data = self._add_words_to_line(line, line_data, page_data)
+            page_data.lines.append(line_data)
 
-        return page
+        return page_data
     
-    def _add_words_to_line(self, line: Element, line_data: OCRLine) -> OCRLine:
+    def _add_words_to_line(self, line: Element, line_data: OCRLine, page_data: OCRPage) -> OCRLine:
 
         for word in self._get_words(line):
             word_data = OCRWord()
-            word_data.bbox = self._get_bounding_box(word)
+            word_data.bbox = self._get_bounding_box(word, page_data)
             word_data.text = word.firstChild.nodeValue
             line_data.words.append(word_data)
         
@@ -135,12 +135,15 @@ class OcrRunner(object):
                 words.append(child)
         return words
     
-    def _get_bounding_box(self, element: Element):
-        
+    def _get_bounding_box(self, element: Element, page_data: OCRPage):
+        '''
+        We recalculate the bounding box to match the differing coordinate
+        system of reportlab
+        '''
         matcher = re.match(self.re_boundingbox, element.getAttribute("title"))
         if matcher:
-            return (float(matcher.group(1)), float(matcher.group(2)),
-                    float(matcher.group(3)), float(matcher.group(4)))
+            return (float(matcher.group(1)), page_data.height - float(matcher.group(2)),
+                    float(matcher.group(3)), page_data.height - float(matcher.group(4)))
         raise Exception("Malformed hocr")
     
     def _get_baseline_coefficients(self, element: Element):

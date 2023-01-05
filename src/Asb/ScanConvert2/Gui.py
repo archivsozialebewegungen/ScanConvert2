@@ -16,7 +16,8 @@ from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog
+    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox,\
+    QButtonGroup, QRadioButton
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
@@ -249,6 +250,7 @@ class Window(QMainWindow):
         label = QLabel("Algorithmus:")
         left_panel.addWidget(label)
         left_panel.addLayout(self._get_page_params_layout())
+        left_panel.addLayout(self._get_rotate_box())
         if self.previewer.is_working():
             preview_button = QPushButton("Vorschau")
             preview_button.clicked.connect(self._show_current_page)
@@ -276,6 +278,68 @@ class Window(QMainWindow):
         self.main_algo_select.currentIndexChanged.connect(self._main_algo_changed)
         page_params.addWidget(self.main_algo_select)
         return page_params
+
+    def _get_rotate_box(self):
+        
+        complete_box = QVBoxLayout()
+                    
+        rotate_box = QGroupBox("Drehen")
+        rotate_layout = QHBoxLayout()
+        rotate_group = QButtonGroup(self)
+        self.rotate_0 = QRadioButton("0°", self)
+        self.rotate_0.setChecked(True)
+        self.rotate_0.toggled.connect(self._change_rotation)
+        self.rotate_90 = QRadioButton("90°", self)
+        self.rotate_90.clicked.connect(self._change_rotation)
+        self.rotate_180 = QRadioButton("180°", self)
+        self.rotate_180.clicked.connect(self._change_rotation)
+        self.rotate_270 = QRadioButton("270°", self)
+        self.rotate_270.clicked.connect(self._change_rotation)
+        rotate_layout.addWidget(self.rotate_0)
+        rotate_layout.addWidget(self.rotate_90)
+        rotate_layout.addWidget(self.rotate_180)
+        rotate_layout.addWidget(self.rotate_270)
+        rotate_group.addButton(self.rotate_0)
+        rotate_group.addButton(self.rotate_90)
+        rotate_group.addButton(self.rotate_180)
+        rotate_group.addButton(self.rotate_270)
+        rotate_box.setLayout(rotate_layout)
+        complete_box.addWidget(rotate_box)
+    
+        return complete_box
+
+    def _change_rotation(self):
+        
+        print("Hallo Welt!")
+        if self._get_rotation() != self.current_page.additional_rotation_angle:
+            self.current_page.additional_rotation_angle = self._get_rotation()
+            self.show_page()
+
+    def _get_rotation(self):
+
+        if self.rotate_0.isChecked():
+            return 0
+        if self.rotate_90.isChecked():
+            return 90
+        if self.rotate_180.isChecked():
+            return 180
+        if self.rotate_270.isChecked():
+            return 270
+
+    def _set_rotation(self, angle):
+
+        if angle == 0:
+            self.rotate_0.setChecked(True)
+            return
+        if angle == 90:
+            self.rotate_90.setChecked(True)
+            return
+        if angle == 180:
+            self.rotate_180.setChecked(True)
+            return
+        if angle == 270:
+            self.rotate_270.setChecked(True)
+        return
     
     def _get_region_params_layout(self):
 
@@ -369,16 +433,29 @@ class Window(QMainWindow):
         
     def _save_project(self):
         
-        file = open("/tmp/project.scp", "wb")
+        file_selection = QFileDialog.getSaveFileName(parent=self,
+                                                caption="ScanConvert2-Datei für das Speichern angeben",
+                                                filter="ScanConvert2-Dateien (*.scp)")
+        new_file_name = file_selection[0]
+        if new_file_name == "":
+            return
+        
+        if new_file_name[-4:] != '.scp':
+            new_file_name += ".scp"
+        file = open(new_file_name, "wb")
         pickle.dump(self.project, file)
         file.close()
     
     def _load_project(self):
         
-        file = open("/tmp/project.scp", "rb")
-        project = pickle.load(file)
-        file.close()
-        self._init_from_project(project)
+        file_selection = QFileDialog.getOpenFileName(parent=self,
+                                                caption="ScanConvert2-Datei für das Laden auswählen",
+                                                filter="ScanConvert2-Dateien (*.scp)")
+        if file_selection[0] != "":
+            file = open(file_selection[0], "rb")
+            project = pickle.load(file)
+            file.close()
+            self._init_from_project(project)
         
     def _export_pdf(self):
         
@@ -552,13 +629,14 @@ class Window(QMainWindow):
 
     def show_page(self):
 
-        page = self.project.pages[self.current_page_no-1]
         self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
-        self.graphics_view.set_page(page.get_base_image())
+        if self.current_page.additional_rotation_angle != self._get_rotation():
+            self._set_rotation(self.current_page.additional_rotation_angle)
+        self.graphics_view.set_page(self.current_page.get_base_image())
 
         self.main_algo_select.setEnabled(True)
         for idx in range(0, self.main_algo_select.count()):
-            if self.main_algo_select.itemText(idx) == ALGORITHM_TEXTS[page.main_region.mode_algorithm]:
+            if self.main_algo_select.itemText(idx) == ALGORITHM_TEXTS[self.current_page.main_region.mode_algorithm]:
                 self.main_algo_select.setCurrentIndex(idx)
                 break
 
@@ -582,7 +660,9 @@ class Window(QMainWindow):
         self.project = project
         self.no_of_pages = len(self.project.pages)
         self.current_page_no = 0
-        self.next_page() 
+        self.next_page()
+        
+    current_page = property(lambda self: self.project.pages[self.current_page_no-1])
         
             
 if __name__ == '__main__':

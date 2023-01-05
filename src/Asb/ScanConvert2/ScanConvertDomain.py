@@ -173,8 +173,7 @@ class Page:
     special region, on which we want to apply different
     algorithms. The coordinates of the sub region relate
     to the already transformed scan, not the original
-    scan coordinates. [This is not part of the MVP and will be
-    implemented later.] 
+    scan coordinates. 
     '''
     
     def __init__(self, 
@@ -187,6 +186,7 @@ class Page:
         if rotation_angle not in (0, 90, 180, 270):
             raise IllegalRotationAngle()
         self.rotation_angle = rotation_angle
+        self.additional_rotation_angle = 0
         self.sub_regions = []
     
     def get_base_image(self, target_resolution=300) -> Image:
@@ -199,8 +199,9 @@ class Page:
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
         if target_resolution != self.scan.resolution:
             img = self._change_resolution(img, self.scan.resolution, target_resolution)
-        if self.rotation_angle != 0:
-            img = self._rotate_image(img, self.rotation_angle)
+        if self.final_rotation_angle != 0:
+            print(self.final_rotation_angle)
+            img = self._rotate_image(img, self.final_rotation_angle)
         return img
             
     def get_final_image(self, target_resolution=300) -> Image:
@@ -409,7 +410,15 @@ class Page:
         
         return final_img
 
+    def _get_final_rotation_angle(self):
+        
+        angle = self.rotation_angle + self.additional_rotation_angle
+        while angle >= 360:
+            angle -= 360
+        return angle
+
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
+    final_rotation_angle = property(_get_final_rotation_angle)
 
 class MetaData(object):
     

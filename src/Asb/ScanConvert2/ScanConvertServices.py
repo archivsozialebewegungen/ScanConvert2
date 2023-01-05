@@ -20,29 +20,6 @@ from reportlab.platypus.paragraph import Paragraph
 
 INVISIBLE = 3
 
-class VerticalParagraph(Paragraph):
-    """Paragraph that is printed vertically"""
-
-    def __init__(self, args, **kwargs):
-        super().__init__(args, **kwargs)
-        self.horizontal_position = -self.style.leading
-
-    def draw(self):
-        """ Draw text """
-        canvas = self.canv
-        canvas.rotate(90)
-        canvas.translate(1, self.horizontal_position)
-        super().draw()
-
-    def wrap(self, available_width, _):
-        """ Wrap text in table """
-        string_width = self.canv.stringWidth(
-            self.getPlainText(), self.style.fontName, self.style.fontSize
-        )
-        self.horizontal_position = - (available_width + self.style.leading) / 2
-        height, _ = super().wrap(availWidth=1 + string_width, availHeight=available_width)
-        return self.style.leading, height
-    
 @singleton
 class OCRService(object):
     '''
@@ -66,13 +43,24 @@ class OCRService(object):
     
     def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
 
+        if line.textangle == 90:
+            bbox_new = (line.bbox[3], -1*line.bbox[2], line.bbox[1], -1*line.bbox[0])
+            line.bbox = bbox_new
+            pdf.rotate(90)
             
         for word in line.words:
             pdf = self._write_word(word, pdf, line, page)
         
+        if line.textangle == 90:
+            pdf.rotate(270)
+            
         return pdf
     
     def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
+
+        if line.textangle == 90:
+            bbox_new = (word.bbox[3], -1*word.bbox[2], word.bbox[1], -1*word.bbox[0])
+            word.bbox = bbox_new
 
         text_origin = self._calculate_text_origin(word, line, page)
         
@@ -108,11 +96,8 @@ class OCRService(object):
 
     def _calculate_text_origin(self, word, line, page):
 
-        offset = page.height
-        if line.textangle == 90:
-            offset = page.width
         text_origin_x = word.bbox[0] * 72.0 / page.dpi
-        text_origin_y = offset - word.bbox[1] * 72.0 / page.dpi
+        text_origin_y = word.bbox[1] * 72.0 / page.dpi
         if line.baseline_coefficients[0] != 1.0 and line.baseline_coefficients[1] != 0.0:
             # Wir nutzen die Baseline-Informationen von tesseract
             # Die beiden Koeffizienten definieren eine lineare Gleichung für
@@ -120,7 +105,7 @@ class OCRService(object):
             wortmittelpunkt_x_absolut = (word.bbox[0] + word.bbox[2]) / 2
             wortmittelpunkt_x_relativ = wortmittelpunkt_x_absolut - line.bbox[0]
             baseline_abweichung = wortmittelpunkt_x_relativ * line.baseline_coefficients[0] + line.baseline_coefficients[1]
-            text_origin_y = (offset - line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
+            text_origin_y = (line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
         
         return (text_origin_x, text_origin_y)
         
