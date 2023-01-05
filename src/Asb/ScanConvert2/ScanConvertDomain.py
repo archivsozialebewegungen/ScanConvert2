@@ -188,6 +188,7 @@ class Page:
         self.rotation_angle = rotation_angle
         self.additional_rotation_angle = 0
         self.sub_regions = []
+        self.skip_page = False
     
     def get_base_image(self, target_resolution=300) -> Image:
         

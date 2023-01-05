@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
     QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox,\
-    QButtonGroup, QRadioButton
+    QButtonGroup, QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
@@ -251,6 +251,9 @@ class Window(QMainWindow):
         left_panel.addWidget(label)
         left_panel.addLayout(self._get_page_params_layout())
         left_panel.addLayout(self._get_rotate_box())
+        self.skip_page_checkbox = QCheckBox("Seite überspringen")
+        self.skip_page_checkbox.clicked.connect(self._toggle_skip_page)
+        left_panel.addWidget(self.skip_page_checkbox)
         if self.previewer.is_working():
             preview_button = QPushButton("Vorschau")
             preview_button.clicked.connect(self._show_current_page)
@@ -270,6 +273,12 @@ class Window(QMainWindow):
         
         left_panel.addStretch(10)
         return left_panel
+    
+    def _toggle_skip_page(self):
+        
+        if self.current_page_no is None:
+            return
+        self.current_page.skip_page = self.skip_page_checkbox.isChecked()
         
     def _get_page_params_layout(self):
         
@@ -630,6 +639,7 @@ class Window(QMainWindow):
     def show_page(self):
 
         self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        self.skip_page_checkbox.setChecked(self.current_page.skip_page)
         if self.current_page.additional_rotation_angle != self._get_rotation():
             self._set_rotation(self.current_page.additional_rotation_angle)
         self.graphics_view.set_page(self.current_page.get_base_image())
