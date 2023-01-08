@@ -22,9 +22,11 @@ from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, ALGORITHM_TEXTS, Page
+    Region, ALGORITHM_TEXTS, Page, Algorithm, NoPagesInProjectException,\
+    NoRegionsOnPageException
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
-from Asb.ScanConvert2.TaskRunner import ExportTarget, TaskManager, JobDefinition
+from Asb.ScanConvert2.TaskRunner import TaskType, TaskManager, JobDefinition
+from Asb.ScanConvert2.PictureDetector import PictureDetector
 
 
 CREATE_REGION = "Region anlegen"
@@ -204,11 +206,6 @@ class Window(QMainWindow):
 
         super().__init__()
         
-        self.current_page_no = 0
-        self.current_region_no = 0
-        self.no_of_pages = 0
-        self.no_of_regions = 0
-        
         self.project_service = project_service
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
@@ -256,7 +253,7 @@ class Window(QMainWindow):
         left_panel.addWidget(self.skip_page_checkbox)
         if self.previewer.is_working():
             preview_button = QPushButton("Vorschau")
-            preview_button.clicked.connect(self._show_current_page)
+            preview_button.clicked.connect(self._preview_current_page)
             left_panel.addWidget(preview_button)
             
         label = QLabel("<b>Regioneneinstellungen</b>")
@@ -319,7 +316,6 @@ class Window(QMainWindow):
 
     def _change_rotation(self):
         
-        print("Hallo Welt!")
         if self._get_rotation() != self.current_page.additional_rotation_angle:
             self.current_page.additional_rotation_angle = self._get_rotation()
             self.show_page()
@@ -367,23 +363,28 @@ class Window(QMainWindow):
         
     def _main_algo_changed(self):
         
-        if self.current_page_no is None:
+        try:
+            current_page = self.current_page
+        except NoPagesInProjectException:
             return
         combo_box = self.sender()
         for value, text in ALGORITHM_TEXTS.items():
             if combo_box.currentText() == text:
-                self.project.pages[self.current_page_no-1].main_region.mode_algorithm = value
+                current_page.main_region.mode_algorithm = value
 
     def _region_algo_changed(self):
         
-        if self.current_page_no is None:
+        try:
+            region = self.current_page.current_sub_region
+        except NoPagesInProjectException:
             return
-        if self.current_region_no is None:
+        except NoRegionsOnPageException:
             return
+            
         combo_box = self.sender()
         for value, text in ALGORITHM_TEXTS.items():
             if combo_box.currentText() == text:
-                self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1].mode_algorithm = value
+                region.mode_algorithm = value
 
     def _get_right_panel(self):
 
@@ -393,8 +394,11 @@ class Window(QMainWindow):
         self.new_region_button.clicked.connect(self.create_save_region)
         self.delete_region_button = QPushButton(text="Region löschen")
         self.delete_region_button.clicked.connect(self.delete_cancel_region)
+        self.mark_photos_button = QPushButton(text="Photos markieren")
+        self.mark_photos_button.clicked.connect(self.mark_photos)
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
+        page_view_buttons_layout.addWidget(self.mark_photos_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
@@ -436,9 +440,12 @@ class Window(QMainWindow):
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
     
-    def _show_current_page(self):
+    def _preview_current_page(self):
         
-        self.previewer.show(self.project.pages[self.current_page_no-1])
+        try:
+            self.previewer.show(self.project.current_page)
+        except NoPagesInProjectException:
+            pass
         
     def _save_project(self):
         
@@ -473,7 +480,8 @@ class Window(QMainWindow):
                                                 filter="Pdf-Dateien (*.pdf)")
 
         if file_base[0] != "":
-            job = JobDefinition(self.project, file_base[0], ExportTarget.PDF_EXPORT)
+            job = JobDefinition(self.project, TaskType.PDF_EXPORT,
+                                file_base=file_base[0])
             self.task_manager.add_task(job)
             
     def show_job_status(self):
@@ -514,45 +522,42 @@ class Window(QMainWindow):
         
     def previous_page(self):
         
-        if self.no_of_pages == 0:
+        try:
+            self.project.previous_page()
+        except NoPagesInProjectException:
             return
-        
-        self.current_page_no -= 1
-        if self.current_page_no == 0:
-            self.current_page_no = self.no_of_pages
+
         self.show_page()
     
     def next_page(self):
 
-        if self.no_of_pages == 0:
+        try:
+            self.project.next_page()
+        except NoPagesInProjectException:
             return
-        
-        self.current_page_no += 1
-        if self.current_page_no == self.no_of_pages + 1:
-            self.current_page_no = 1
-        
+
         self.show_page()
         
     def next_region(self):
 
-        if self.no_of_regions == 0:
+        try:
+            self.current_page.next_region()
+        except NoPagesInProjectException:
             return
-        
-        self.current_region_no += 1
-        if self.current_region_no == self.no_of_regions + 1:
-            self.current_region_no = 1
+        except NoRegionsOnPageException:
+            return
 
         self.show_region()
 
     def previous_region(self):
 
-        if self.no_of_regions == 0:
+        try:
+            self.current_page.previous_region()
+        except NoPagesInProjectException:
             return
-        
-        self.current_region_no -= 1
-        if self.current_region_no == 0:
-            self.current_region_no = self.no_of_regions
-        
+        except NoRegionsOnPageException:
+            return
+
         self.show_region()    
 
     def create_save_region(self):
@@ -601,44 +606,51 @@ class Window(QMainWindow):
     
     def delete_region(self):
         
-        if self.current_region_no == 0:
-            return
-        del(self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1])
-        self.reset_region()
+        del(self.current_page.sub_regions[self.current_page.current_sub_region_no-1])
+        self.graphics_view.reset_rubberband()
+        try:
+            self.current_page.first_region()
+            self.show_region()
+        except NoRegionsOnPageException:
+            pass
         
-    def reset_region(self):
-
-        self.no_of_regions = len(self.project.pages[self.current_page_no-1].sub_regions)
-        if self.no_of_regions == 0:
-            self.current_region_no = 0
-        else:
-            self.current_region_no = 1
-            
-        self.show_region()
-    
     def cancel_region(self):
         
         self.show_region()
         self.graphics_view.region_select = False
+    
+    def mark_photos(self):
+        
+        job = JobDefinition(self.project, TaskType.PHOTO_DETECTION,
+                            post_job_method=None)
+        self.task_manager.add_task(job)
         
     def show_region(self):
 
-        self.region_number_label.setText("%d/%d" % (self.current_region_no, self.no_of_regions))
-        self.graphics_view.reset_rubberband()
-        if self.no_of_regions > 0:
-            self.graphics_view.show_region(self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1])
-            region = self.project.pages[self.current_page_no-1].sub_regions[self.current_region_no-1]
-            self.region_algo_select.setEnabled(True)
-            for idx in range(0, self.main_algo_select.count()):
-                if self.region_algo_select.itemText(idx) == ALGORITHM_TEXTS[region.mode_algorithm]:
-                    self.region_algo_select.setCurrentIndex(idx)
-                    break
-        else:
+        try:
+            self.region_number_label.setText("%d/%d" % (self.current_page.current_sub_region_no, self.current_page.no_of_sub_regions))
+        except NoRegionsOnPageException:
+            self.region_number_label.setText("0/0")
             self.region_algo_select.setEnabled(False)
+            return
+        
+        region = self.current_page.current_sub_region
+        self.graphics_view.reset_rubberband()
+        self.graphics_view.show_region(region)
+        self.region_algo_select.setEnabled(True)
+        for idx in range(0, self.main_algo_select.count()):
+            if self.region_algo_select.itemText(idx) == ALGORITHM_TEXTS[region.mode_algorithm]:
+                self.region_algo_select.setCurrentIndex(idx)
+                break
 
     def show_page(self):
 
-        self.page_number_label.setText("%d/%d" % (self.current_page_no, self.no_of_pages))
+        try:
+            self.page_number_label.setText("%d/%d" % (self.project.current_page_no, self.project.no_of_pages))
+        except NoPagesInProjectException():
+            self.page_number_label.setText("0/0")
+            return
+        
         self.skip_page_checkbox.setChecked(self.current_page.skip_page)
         if self.current_page.additional_rotation_angle != self._get_rotation():
             self._set_rotation(self.current_page.additional_rotation_angle)
@@ -650,7 +662,11 @@ class Window(QMainWindow):
                 self.main_algo_select.setCurrentIndex(idx)
                 break
 
-        self.reset_region()
+        try:
+            self.current_page.first_region()
+            self.show_region()
+        except NoRegionsOnPageException:
+            self.graphics_view.reset_rubberband()
         
     def _start_new_project(self):
         
@@ -668,11 +684,9 @@ class Window(QMainWindow):
     def _init_from_project(self, project: Project):
         
         self.project = project
-        self.no_of_pages = len(self.project.pages)
-        self.current_page_no = 0
         self.next_page()
         
-    current_page = property(lambda self: self.project.pages[self.current_page_no-1])
+    current_page = property(lambda self: self.project.current_page)
         
             
 if __name__ == '__main__':

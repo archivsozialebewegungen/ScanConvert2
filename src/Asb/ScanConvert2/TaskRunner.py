@@ -9,15 +9,17 @@ while the current tasks are running.
 '''
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from injector import singleton, inject
-from Asb.ScanConvert2.ScanConvertDomain import Project
+from Asb.ScanConvert2.ScanConvertDomain import Project, Region, Algorithm
 from enum import Enum
 import threading
 import traceback
+from Asb.ScanConvert2.PictureDetector import PictureDetector
 
-class ExportTarget(Enum):
+class TaskType(Enum):
     
     PDF_EXPORT = 0
     TIFF_EXPORT = 1
+    PHOTO_DETECTION = 2
 
 class JobDefinition():
     '''
@@ -25,20 +27,27 @@ class JobDefinition():
     and the task type at hand
     '''
     
-    def __init__(self, project: Project, file_base: str, export_target: ExportTarget):
+    def __init__(self, project: Project, task_type: TaskType,
+                 pre_job_method=None,
+                 post_job_method=None,
+                 file_base: str=None):
         
         self.project = project
+        self.task_type = task_type
+        self.pre_job_method = pre_job_method
+        self.post_job_method = post_job_method
         self.file_base = file_base
-        self.export_target = export_target
         
 @singleton
 class TaskManager():
     
 
     @inject
-    def __init__(self, project_service: ProjectService):
+    def __init__(self, project_service: ProjectService,
+                 photo_detector: PictureDetector):
         
         self.project_service = project_service
+        self.photo_detector = photo_detector
         
         self.message_function = None
         
@@ -58,10 +67,18 @@ class TaskManager():
     def run_job(self, job: JobDefinition):
         
         try:
-            if job.export_target == ExportTarget.PDF_EXPORT:
+            if job.pre_job_method is not None:
+                job.pre_job_method()
+            
+            if job.task_type == TaskType.PDF_EXPORT:
                 self.convert_to_pdf(job)
-            if job.export_target == ExportTarget.TIFF_EXPORT:
+            if job.task_type == TaskType.TIFF_EXPORT:
                 self.convert_to_tif(job)
+            if job.task_type == TaskType.PHOTO_DETECTION:
+                self.run_photo_detection(job)
+            
+            if job.post_job_method is not None:
+                job.post_job_method()
         except Exception as e:
             # TODO: Show error somewhere
             print(e)
@@ -80,6 +97,19 @@ class TaskManager():
         
         self.worker_thread_running = False
     
+    def run_photo_detection(self, job: JobDefinition):
+        
+        current_page = job.project.current_page
+        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image())
+        if len(photo_bboxes) == 0:
+            return
+        
+        for bbox in photo_bboxes:
+            current_page.add_region(Region(bbox[0], bbox[1],
+                                           bbox[2] - bbox[0], bbox[3] - bbox[1],
+                                           Algorithm.FLOYD_STEINBERG))
+        current_page.current_sub_region_no = current_page.no_of_sub_regions
+        
     def convert_to_tif(self, job: JobDefinition):
         
         raise Exception("Not yet implemented")

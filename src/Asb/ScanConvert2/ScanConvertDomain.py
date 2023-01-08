@@ -158,7 +158,11 @@ class Scan(object):
             return Mode.COLOR
         
         raise UnknownImageMode(img.mode)
+
+class NoRegionsOnPageException(Exception):
     
+    pass
+
 class Page:
     '''
     This class describes a single page of a project. In
@@ -189,7 +193,28 @@ class Page:
         self.additional_rotation_angle = 0
         self.sub_regions = []
         self.skip_page = False
-    
+        self.current_sub_region_no = 0
+ 
+    def first_region(self):
+        
+        if len(self.sub_regions) == 0:
+            raise NoRegionsOnPageException
+        self.current_sub_region_no = 1
+        
+    def next_region(self):
+        
+        if self.current_sub_region_no + 1 > self.no_of_sub_regions:
+            self.current_sub_region_no = 1
+        else:
+            self.current_sub_region_no += 1
+
+    def previous_region(self):
+        
+        if self.current_sub_region_no <= 1:
+            self.current_sub_region_no = self.no_of_sub_regions
+        else:
+            self.current_sub_region = 1
+
     def get_base_image(self, target_resolution=300) -> Image:
         
         if target_resolution > self.scan.resolution:
@@ -236,6 +261,10 @@ class Page:
             final_img = final_img.convert("L")
         final_img.paste(region_img, (region.x, region.y, region.x2, region.y2))
         return final_img
+    
+    def add_region(self, region: Region):
+        
+        self.sub_regions.append(region)
     
     def _change_resolution(self, img: Image, source_resolution: int, target_resolution: int) -> Image:
 
@@ -418,8 +447,22 @@ class Page:
             angle -= 360
         return angle
 
+    def _get_current_region(self):
+        
+        if self.no_of_sub_regions == 0:
+            raise(NoRegionsOnPageException())
+        return self.sub_regions[self.current_sub_region_no-1]
+    
+    def _get_number_of_sub_regions(self):
+        
+        if len(self.sub_regions) == 0:
+            raise NoRegionsOnPageException()
+        return len(self.sub_regions)
+        
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
     final_rotation_angle = property(_get_final_rotation_angle)
+    current_sub_region = property(_get_current_region)
+    no_of_sub_regions = property(_get_number_of_sub_regions)
 
 class MetaData(object):
     
@@ -430,6 +473,10 @@ class MetaData(object):
         self.subject = ""
         self.keywords = ""
 
+class NoPagesInProjectException(Exception):
+    
+    pass
+
 class Project(object):
     
     def __init__(self,
@@ -437,3 +484,33 @@ class Project(object):
 
         self.pages = pages
         self.metadata = MetaData()
+        self.current_page_no = 0
+        
+    def next_page(self):
+        
+        if self.current_page_no + 1 > self.no_of_pages:
+            self.current_page_no = 1
+        else:
+            self.current_page_no += 1
+
+    def previous_page(self):
+        
+        if self.current_page_no <= 1:
+            self.current_page_no = self.no_of_pages
+        else:
+            self.current_page_no = 1
+
+    def _get_current_page(self):
+        
+        if self.no_of_pages == 0:
+            raise(NoPagesInProjectException())
+        return self.pages[self.current_page_no-1]
+    
+    def _get_number_of_pages(self):
+        
+        if len(self.pages) == 0:
+            raise NoPagesInProjectException()
+        return len(self.pages)
+    
+    current_page = property(_get_current_page)
+    no_of_pages = property(_get_number_of_pages)
