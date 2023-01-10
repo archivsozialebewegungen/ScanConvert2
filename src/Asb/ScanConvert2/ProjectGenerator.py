@@ -15,7 +15,7 @@ class NumberOfPagesDetector:
         sizes = []
         for scan in scans:
             scan.no_of_pages = 2
-            sizes.append(1.0 * scans[0].width * scans[0].height)
+            sizes.append(1.0 * scan.width * scan.height)
         
         diff = max(sizes) / min(sizes)
         
