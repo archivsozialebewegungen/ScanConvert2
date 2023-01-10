@@ -24,9 +24,11 @@ class Algorithm(Enum):
     OTSU=4
     SAUVOLA=5
     FLOYD_STEINBERG=6
-    QUANTIZATION=7
-    BW_QUANTIZATION=8
-    COLOR_TEXT_QUANTIZATION=9
+    COLOR_PAPER_QUANTIZATION=7
+    COLOR_TEXT_QUANTIZATION=8
+    TWO_COLOR_QUANTIZATION=9
+    BW_QUANTIZATION=10
+    WEISS=11
 
 ALGORITHM_TEXTS = {
     Algorithm.NONE: "Modus beibehalten",
@@ -35,9 +37,12 @@ ALGORITHM_TEXTS = {
     Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
     Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
     Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
-    Algorithm.QUANTIZATION: "Farbiges Papier",
+    Algorithm.COLOR_PAPER_QUANTIZATION: "Farbiges Papier",
+    Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund",
+    Algorithm.TWO_COLOR_QUANTIZATION: "Schrift und Text farbig",
     Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen",
-    Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund"}
+    Algorithm.WEISS: "Komplett weiss"
+    }
     
 class SortType(Enum):
     
@@ -305,12 +310,16 @@ class Page:
             return self._apply_threshold_algorithm(img, Algorithm.SAUVOLA)
         if algorithm == Algorithm.FLOYD_STEINBERG:
             return self._apply_algorithm_floyd_steinberg(img)
-        if algorithm == Algorithm.QUANTIZATION:
+        if algorithm == Algorithm.COLOR_PAPER_QUANTIZATION:
+            return self._apply_algorithm_color_paper(img)
+        if algorithm == Algorithm.COLOR_TEXT_QUANTIZATION:
+            return self._apply_algorithm_color_text_quantization(img)
+        if algorithm == Algorithm.TWO_COLOR_QUANTIZATION:
             return self._apply_algorithm_quantization(img)
         if algorithm == Algorithm.BW_QUANTIZATION:
             return self._apply_algorithm_bw_quantization(img)
-        if algorithm == Algorithm.COLOR_TEXT_QUANTIZATION:
-            return self._apply_algorithm_color_text_quantization(img)
+        if algorithm == Algorithm.WEISS:
+            return self._apply_algorithm_white(img)
         raise Exception("Unknown Algorithm.")
     
     def _apply_algorithm_gray(self, img: Image):
@@ -415,7 +424,29 @@ class Page:
         
         return final_img.convert("1")
     
+    def _apply_algorithm_color_paper(self, img: Image):
+        
+        quantized_img = self._apply_algorithm_quantization(img)
+        colors = quantized_img.getcolors()
+        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
+        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
+        if sum1 < sum0:
+            black = colors[1][1]
+        else: 
+            black = colors[0][1]
+        
+        assert(quantized_img.mode == "RGB")
+        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
+        red, green, blue = np_img.T # Temporarily unpack the bands for readability
 
+        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
+        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
+
+        final_img = Image.fromarray(np_img)
+        final_img.info['dpi'] = img.info['dpi']
+        
+        return final_img
+    
     def _apply_algorithm_color_text_quantization(self, img: Image):
         
         quantized_img = self._apply_algorithm_quantization(img)
@@ -439,6 +470,12 @@ class Page:
         final_img.info['dpi'] = img.info['dpi']
         
         return final_img
+
+    def _apply_algorithm_white(self, img):
+        
+        return Image.new("1", img.size, 1)
+        
+        
 
     def _get_final_rotation_angle(self):
         
