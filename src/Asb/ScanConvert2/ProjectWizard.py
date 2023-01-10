@@ -9,19 +9,16 @@ from PySide6.QtWidgets import QVBoxLayout, QLabel, QRadioButton, QCheckBox, \
     QWizardPage, QAbstractItemView, QTableWidget, QTableWidgetItem, QFileDialog, \
     QHBoxLayout, QPushButton, QWizard, QLineEdit, QPlainTextEdit
 
-from Asb.ScanConvert2.ScanConvertDomain import Scannertype, Scan, \
-    Scantype, SortType, ALGORITHM_TEXTS, MetaData
+from Asb.ScanConvert2.ScanConvertDomain import Scan, \
+    SortType, MetaData
 
-METADATA_PAGE=8
-PDF_ALGORITHM_PAGE=6
+SCANS_PAGE = 1
+PAGE_PER_SCAN_PAGE = 2
 SINGLE_SORT_TYPE_PAGE = 3
 DOUBLE_SORT_TYPE_PAGE = 4
-PAGE_PER_SCAN_PAGE = 2
-SCANNER_TYPE_PAGE = 7
 SCAN_ROTATION_PAGE = 5
-SCANS_PAGE = 1
 
-class ExpertProjectWizard(QWizard):
+class ProjectWizard(QWizard):
         
     def __init__(self):
         
@@ -32,8 +29,6 @@ class ExpertProjectWizard(QWizard):
             SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self),
             SINGLE_SORT_TYPE_PAGE: ProjectWizardPageSingleSortType(self),
             DOUBLE_SORT_TYPE_PAGE: ProjectWizardPageDoubleSortType(self),
-            PDF_ALGORITHM_PAGE: ProjectWizardPageAlgorithmType(self),
-            METADATA_PAGE: ProjectWizardPageMetadata(self)
             }
         for page_id in self.pages.keys():
             self.setPage(page_id, self.pages[page_id])
@@ -52,51 +47,7 @@ class ExpertProjectWizard(QWizard):
     scan_rotation = property(lambda self: self.pages[SCAN_ROTATION_PAGE].result)
     rotation_alternating = property(lambda self: self.pages[SCAN_ROTATION_PAGE].alternating)
     sort_type = property(_get_sort_type)
-    pdf_algorithm = property(lambda self: self.pages[PDF_ALGORITHM_PAGE].result)
-    metadata = property(lambda self: self.pages[METADATA_PAGE].metadata)
     
-
-class SimpleProjectWizard(QWizard):
-    
-    SCANNER_TYPE_PAGE = 1
-    PAGE_PER_SCAN_PAGE = 2
-    SCANS_PAGE = 3
-    SCAN_ROTATION_PAGE = 4
-        
-    def __init__(self):
-        
-        super().__init__()
-        self.pages = {
-            self.SCANNER_TYPE_PAGE: ProjectWizardPageScannerType(self),
-            self.PAGE_PER_SCAN_PAGE: ProjectWizardPagePagesPerScan(self),
-            self.SCANS_PAGE: ProjectWizardPageScans(self),
-            self.SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self)
-            }
-        for page_id in self.pages.keys():
-            self.setPage(page_id, self.pages[page_id])
-             
-        self.setWindowTitle("Neues Projekt anlegen")
-        
-    def _get_scan_type(self):
-        
-        if self.pages_per_scan == 1:
-            return self._single_page_scan_type()
-        else:
-            return self._double_page_scan_type()
-    
-    def _single_page_scan_type(self):
-        
-        if self.scanner_type == Scannertype.OVERHEAD:
-            # For Overhead-Scanner we assume no rotation
-            return Scantype.SINGLE
-    
-    scan_type = property(_get_scan_type)
-    scans = property(lambda self: self.pages[self.SCANS_PAGE].scans)
-    scanner_type = property(lambda self: self.pages[self.SCANNER_TYPE_PAGE].scanner_type)
-    pages_per_scan = property(lambda self: self.pages[self.PAGE_PER_SCAN_PAGE].pages_per_scan)
-    project_type = property(lambda self: self.pages[self.PROJECT_TYPE_PAGE].project_type)
-    scan_rotation = property(lambda self: self.pages[self.SCAN_ROTATION_PAGE].scan_rotation)
-
 
 class AbstractRadioButtonProjectWizardPage(QWizardPage):
     
@@ -129,23 +80,6 @@ class AbstractRadioButtonProjectWizardPage(QWizardPage):
         print("Radio button text: %s" % radiobutton.text())
         self.result = self.buttons[radiobutton.text()]
         print("Result value: %s" % self.result)        
-
-
-class ProjectWizardPageAlgorithmType(AbstractRadioButtonProjectWizardPage):
-    
-    def __init__(self, parent):
-
-        algos = {}
-        for algo, algo_text in ALGORITHM_TEXTS.items():
-            algos[algo_text] = algo
-        
-        super().__init__(parent,
-            "Welcher Algorithmus soll für die pdf-Erstellung verwendet werden?",
-            "In der Regel werden die Seiten in pdf-Dateien nach SW konvertiert. " + 
-                         "Hier kann der Standard-Algorithmus gewählt werden.",
-            'Algorithmus auswählen:',
-            algos
-            )
 
 
 class ProjectWizardPageSingleSortType(AbstractRadioButtonProjectWizardPage):
@@ -205,21 +139,6 @@ class ProjectWizardPagePagesPerScan(AbstractRadioButtonProjectWizardPage):
             return SINGLE_SORT_TYPE_PAGE
         else:
             return DOUBLE_SORT_TYPE_PAGE
-
-class ProjectWizardPageScannerType(AbstractRadioButtonProjectWizardPage):
-    
-    def __init__(self, parent):
-
-        super().__init__(parent,
-            "Scanner-Typ wählen",
-            "Davon hängt ab, wie die Seitenanordnung interpretiert wird.",
-            "Welche Art von Scanner?",
-            {
-                "Overheadscanner": Scannertype.OVERHEAD,
-                "Flachbettscanner": Scannertype.FLATBED,
-                "Einzug (Duplex)": Scannertype.FEEDER_DUPLEX,
-                "Einzug (Simplex)": Scannertype.FEEDER_SIMPLEX
-            })
 
 class ProjectWizardScanRotation(AbstractRadioButtonProjectWizardPage):
     
@@ -359,55 +278,3 @@ class ProjectWizardPageScans(QWizardPage):
         self.filename_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         
         return self.filename_table
-
-class ProjectWizardPageMetadata(QWizardPage):
-    
-    def __init__(self, parent):
-        
-        super().__init__(parent)
-        self.wizard = parent
-        
-        self.setTitle("Metadaten")
-        self.setSubTitle("Metadaten sind sehr wichtig, um das Dokument dauerhaft " +
-                         "identifierbar zu machen.")
-        
-        layout = QVBoxLayout()
-
-        title_layout = QHBoxLayout()
-        label = QLabel("Titel:")
-        title_layout.addWidget(label)
-        self.title_input = QLineEdit(self)
-        title_layout.addWidget(self.title_input)
-        layout.addLayout(title_layout)
-        
-        author_layout = QHBoxLayout()
-        label = QLabel("Autor:in:")
-        author_layout.addWidget(label)
-        self.author_input = QLineEdit(self)
-        author_layout.addWidget(self.author_input)
-        layout.addLayout(author_layout)
-        
-        keywords_layout = QHBoxLayout()
-        label = QLabel("Schlagworte:")
-        keywords_layout.addWidget(label)
-        self.keywords_input = QLineEdit(self)
-        keywords_layout.addWidget(self.keywords_input)
-        layout.addLayout(keywords_layout)
-        
-        label = QLabel("Beschreibung:")
-        layout.addWidget(label)
-        self.description_input = QPlainTextEdit(self)
-        layout.addWidget(self.description_input)
-
-        self.setLayout(layout)
-
-    def _get_metadata(self):
-        
-        metadata = MetaData()
-        metadata.title = self.title_input.text()
-        metadata.author = self.author_input.text()
-        metadata.keywords = self.keywords_input.text()
-        metadata.subject = self.description_input.toPlainText()
-        return metadata
-        
-    metadata = property(_get_metadata)

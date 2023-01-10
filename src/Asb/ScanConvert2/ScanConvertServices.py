@@ -185,16 +185,13 @@ class ProjectService(object):
                     pages_per_scan: int,
                     sort_type: SortType,
                     scan_rotation: int,
-                    rotation_alternating: bool,
-                    pdf_algorithm: Algorithm) -> Project:
+                    rotation_alternating: bool) -> Project:
 
-        print("Scan rotation is now: %d" % scan_rotation)
         return self.project_generator.scans_to_project(scans,
                     pages_per_scan,
                     sort_type,
                     scan_rotation,
-                    rotation_alternating,
-                    pdf_algorithm)
+                    rotation_alternating)
 
     def export_pdf(self, project: Project, filename: str):
         

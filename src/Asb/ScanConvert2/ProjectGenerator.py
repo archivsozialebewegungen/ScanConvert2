@@ -245,8 +245,7 @@ class ProjectGenerator():
                     pages_per_scan: int,
                     sort_type: SortType,
                     scan_rotation: int,
-                    rotation_alternating: bool,
-                    pdf_algorithm: Algorithm):
+                    rotation_alternating: bool):
     
         if pages_per_scan == 2:
             scans = self.number_of_pages_detector.set_numbers(scans)
@@ -256,8 +255,4 @@ class ProjectGenerator():
                     scan_rotation,
                     rotation_alternating)
         
-        if pdf_algorithm != Algorithm.NONE:
-            for page in pages:
-                page.main_region.mode_algorithm = pdf_algorithm
-                
         return Project(self.page_sorter.sort_pages(pages, sort_type))

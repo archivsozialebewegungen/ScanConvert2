@@ -47,19 +47,15 @@ class PictureDetector(object):
             return True
         ratio = 1.0 * histogram[0] / histogram[255]
         print(ratio)
-        return ratio > 0.8
+        return ratio > 0.6
     
     def _get_areas(self, img: Image) -> []:
         
         hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang="deu", config='--psm 1')
-        alto = pytesseract.image_to_alto_xml(img) 
         bboxes = []
         dom = parseString(hocr)
-        alto_dom = parseString(alto)
-        with open("/tmp/hocr.xml", "w") as output:
-            output.write(dom.toprettyxml("  "))
-        with open("/tmp/alto.xml", "w") as output:
-            output.write(alto_dom.toprettyxml("  "))
+        #with open("/tmp/hocr.xml", "w") as output:
+        #    output.write(dom.toprettyxml("  "))
         for element in dom.getElementsByTagName("div"):
             if element.getAttribute("class") == "ocr_carea":
                 matcher = re.match(self.re_boundingbox, element.getAttribute("title"))

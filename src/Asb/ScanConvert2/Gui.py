@@ -11,7 +11,7 @@ import tempfile
 
 from PIL import Image
 from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QRect, QSize, QRectF, Qt, QPoint
+from PySide6.QtCore import QRect, QSize, QRectF, Qt, QPoint, QThread
 from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
@@ -20,13 +20,14 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QButtonGroup, QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
 
-from Asb.ScanConvert2.ProjectWizard import ExpertProjectWizard
+from Asb.ScanConvert2.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region, ALGORITHM_TEXTS, Page, Algorithm, NoPagesInProjectException,\
-    NoRegionsOnPageException
+    NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from Asb.ScanConvert2.TaskRunner import TaskType, TaskManager, JobDefinition
 from Asb.ScanConvert2.PictureDetector import PictureDetector
+from Asb.ScanConvert2.Dialogs import MetadataDialog
 
 
 CREATE_REGION = "Region anlegen"
@@ -194,6 +195,29 @@ class FehPreviewer(object):
         
         return self.feh is not None
 
+class PhotoDetectionThread(QThread):
+    
+    def __init__(self, parent, photo_detector: PictureDetector, project: Project):
+        
+        super().__init__(parent)
+
+        self.photo_detector = photo_detector
+        self.project = project
+        
+    def run(self):
+        
+        current_page = self.project.current_page
+        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image())
+        if len(photo_bboxes) == 0:
+            return
+        
+        for bbox in photo_bboxes:
+            current_page.add_region(Region(bbox[0], bbox[1],
+                                           bbox[2] - bbox[0], bbox[3] - bbox[1],
+                                           Algorithm.FLOYD_STEINBERG))
+        current_page.current_sub_region_no = current_page.no_of_sub_regions
+        
+        
 @singleton
 class Window(QMainWindow):
     
@@ -202,7 +226,8 @@ class Window(QMainWindow):
     def __init__(self,
                  project_service: ProjectService,
                  task_manager: TaskManager,
-                 previewer: FehPreviewer):
+                 previewer: FehPreviewer,
+                 photo_detector: PictureDetector):
 
         super().__init__()
         
@@ -210,6 +235,8 @@ class Window(QMainWindow):
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
         self.previewer = previewer
+        self.photo_detector = photo_detector
+        self.metadata_dialog = MetadataDialog(self)
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -431,6 +458,11 @@ class Window(QMainWindow):
         pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
         pdf_export_action.triggered.connect(self._export_pdf)
 
+        edit_metadata_action = QAction(QIcon('file.png'), '&Metadaten', self)
+        edit_metadata_action.setShortcut('Ctrl+M')
+        edit_metadata_action.setStatusTip('Metadaten bearbeiten')
+        edit_metadata_action.triggered.connect(self._edit_metadata)
+
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
         fileMenu.addAction(new_project_action)
@@ -439,6 +471,13 @@ class Window(QMainWindow):
         fileMenu.addAction(exit_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
+        exportMenu.addAction(edit_metadata_action)
+    
+    def _edit_metadata(self):
+        
+        self.metadata_dialog.metadata = self.project.metadata
+        if self.metadata_dialog.exec():
+            self.project.metadata = self.metadata_dialog.metadata
     
     def _preview_current_page(self):
         
@@ -588,10 +627,10 @@ class Window(QMainWindow):
         self.graphics_view.region_select = False
 
         new_region = self.graphics_view.get_selected_region()
-        new_region.mode_algorithm = self.project.pages[self.current_page_no-1].main_algorithm
-        self.project.pages[self.current_page_no-1].sub_regions.append(new_region)
+        new_region.mode_algorithm = self.current_page.main_algorithm
+        self.current_page.sub_regions.append(new_region)
         # TODO: Check if something is selected at all
-        self.no_of_regions = len(self.project.pages[self.current_page_no-1].sub_regions)
+        self.no_of_regions = len(self.current_page.sub_regions)
         self.current_region_no = self.no_of_regions
         self.show_region()
     
@@ -619,11 +658,15 @@ class Window(QMainWindow):
         self.show_region()
         self.graphics_view.region_select = False
     
+    def show_photo_marking(self, project):
+        
+        self.show_page()
+    
     def mark_photos(self):
         
-        job = JobDefinition(self.project, TaskType.PHOTO_DETECTION,
-                            post_job_method=None)
-        self.task_manager.add_task(job)
+        photo_thread = PhotoDetectionThread(self, self.photo_detector, self.project)
+        photo_thread.finished.connect(self.show_page)
+        photo_thread.start()
         
     def show_region(self):
 
@@ -670,15 +713,15 @@ class Window(QMainWindow):
         
     def _start_new_project(self):
         
-        wizard = ExpertProjectWizard()
+        wizard = ProjectWizard()
         if wizard.exec():
             project = self.project_service.create_project(wizard.scans,
                                                           wizard.pages_per_scan,
                                                           wizard.sort_type,
                                                           wizard.scan_rotation,
-                                                          wizard.rotation_alternating,
-                                                          wizard.pdf_algorithm)
-            project.metadata = wizard.metadata
+                                                          wizard.rotation_alternating)
+            project.metadata = MetaData()
+            project.metadata.subject= "Alle Rechte an diesem Digitalisat liegen beim\nArchiv Soziale Bewegungen e.V., Freiburg"
             self._init_from_project(project)
         
     def _init_from_project(self, project: Project):

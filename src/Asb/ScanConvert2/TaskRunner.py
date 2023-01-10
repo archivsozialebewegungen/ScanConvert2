@@ -99,17 +99,8 @@ class TaskManager():
     
     def run_photo_detection(self, job: JobDefinition):
         
-        current_page = job.project.current_page
-        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image())
-        if len(photo_bboxes) == 0:
-            return
-        
-        for bbox in photo_bboxes:
-            current_page.add_region(Region(bbox[0], bbox[1],
-                                           bbox[2] - bbox[0], bbox[3] - bbox[1],
-                                           Algorithm.FLOYD_STEINBERG))
-        current_page.current_sub_region_no = current_page.no_of_sub_regions
-        
+        pass
+    
     def convert_to_tif(self, job: JobDefinition):
         
         raise Exception("Not yet implemented")

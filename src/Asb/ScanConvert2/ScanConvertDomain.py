@@ -103,7 +103,7 @@ class Region(object):
     and the necessary mode transformation algorithm
     '''
 
-    def __init__(self, x: int, y: int, width: int, height: int, mode_algorithm: Algorithm=Algorithm.NONE):
+    def __init__(self, x: int, y: int, width: int, height: int, mode_algorithm: Algorithm=Algorithm.OTSU):
 
         self.x = x
         self.y = y
@@ -213,7 +213,7 @@ class Page:
         if self.current_sub_region_no <= 1:
             self.current_sub_region_no = self.no_of_sub_regions
         else:
-            self.current_sub_region = 1
+            self.current_sub_region_no -= 1
 
     def get_base_image(self, target_resolution=300) -> Image:
         
@@ -498,7 +498,7 @@ class Project(object):
         if self.current_page_no <= 1:
             self.current_page_no = self.no_of_pages
         else:
-            self.current_page_no = 1
+            self.current_page_no -= 1
 
     def _get_current_page(self):
         
