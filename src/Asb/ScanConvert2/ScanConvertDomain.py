@@ -3,12 +3,8 @@ Created on 01.11.2022
 
 @author: michael
 '''
-from PIL import Image, ImageFilter
+from PIL import Image
 from enum import Enum
-import numpy as np
-from skimage.filters.thresholding import threshold_otsu, threshold_sauvola
-import cv2
-
 
 class Mode(Enum):
     
@@ -23,27 +19,33 @@ class Algorithm(Enum):
     GRAY_WHITE=3
     OTSU=4
     SAUVOLA=5
-    FLOYD_STEINBERG=6
-    COLOR_PAPER_QUANTIZATION=7
-    COLOR_TEXT_QUANTIZATION=8
-    TWO_COLOR_QUANTIZATION=9
-    BW_QUANTIZATION=10
-    WEISS=11
+    NIBLACK=6
+    FLOYD_STEINBERG=7
+    COLOR_PAPER_QUANTIZATION=8
+    COLOR_TEXT_QUANTIZATION=9
+    TWO_COLOR_QUANTIZATION=10
+    BW_QUANTIZATION=11
+    WEISS=12
 
-ALGORITHM_TEXTS = {
-    Algorithm.NONE: "Modus beibehalten",
-    Algorithm.GRAY: "Graustufen",
-    Algorithm.GRAY_WHITE: "Grau auf Weiß",
-    Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
-    Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
-    Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
-    Algorithm.COLOR_PAPER_QUANTIZATION: "Farbiges Papier",
-    Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund",
-    Algorithm.TWO_COLOR_QUANTIZATION: "Schrift und Text farbig",
-    Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen",
-    Algorithm.WEISS: "Komplett weiss"
-    }
     
+    def __str__(self):
+        texts = {
+            Algorithm.NONE: "Modus beibehalten",
+            Algorithm.GRAY: "Graustufen",
+            Algorithm.GRAY_WHITE: "Grau auf Weiß",
+            Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
+            Algorithm.NIBLACK: "SW NIBLACK (Text fleckig)",
+            Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
+            Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
+            Algorithm.COLOR_PAPER_QUANTIZATION: "Farbiges Papier",
+            Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund",
+            Algorithm.TWO_COLOR_QUANTIZATION: "Schrift und Hintergrund farbig",
+            Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen",
+            Algorithm.WEISS: "Komplett weiss"
+        }
+    
+        return texts[self]
+        
 class SortType(Enum):
     
     STRAIGHT=1
@@ -206,8 +208,17 @@ class Page:
             raise NoRegionsOnPageException
         self.current_sub_region_no = 1
         
+    def last_region(self):
+        
+        if len(self.sub_regions) == 0:
+            raise NoRegionsOnPageException
+        self.current_sub_region_no = self.no_of_sub_regions
+        
     def next_region(self):
         
+        if len(self.sub_regions) == 0:
+            raise NoRegionsOnPageException
+
         if self.current_sub_region_no + 1 > self.no_of_sub_regions:
             self.current_sub_region_no = 1
         else:
@@ -215,6 +226,9 @@ class Page:
 
     def previous_region(self):
         
+        if len(self.sub_regions) == 0:
+            raise NoRegionsOnPageException
+
         if self.current_sub_region_no <= 1:
             self.current_sub_region_no = self.no_of_sub_regions
         else:
@@ -235,38 +249,6 @@ class Page:
             img = self._rotate_image(img, self.final_rotation_angle)
         return img
             
-    def get_final_image(self, target_resolution=300) -> Image:
-        
-        img = final_img = self.get_base_image(target_resolution)
-        
-        if self.main_region.mode_algorithm != Algorithm.NONE:
-            final_img = self._apply_algorithm(img, self.main_region.mode_algorithm)
-            
-        return self.apply_regions(final_img, img, target_resolution)
-        
-    def apply_regions(self, final_img: Image, img: Image, target_resolution) -> Image:
-        
-        if len(self.sub_regions) == 0:
-            return final_img
-        
-        for region in self.sub_regions:
-            final_img = self.apply_region(region, final_img, img, target_resolution)
-    
-        return final_img
-    
-    def apply_region(self, region: Region, final_img: Image, img: Image, target_resolution) -> Image:
-        
-        region_img = img.crop((region.x, region.y, region.x2, region.y2))
-        region_img = self._apply_algorithm(region_img, region.mode_algorithm)
-        if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
-            final_img = final_img.convert("RGBA")
-        if region_img.mode == "RGB" and (final_img.mode == "L" or final_img.mode == "1"):
-            final_img = final_img.convert("RGB")
-        if region_img.mode == "L" and final_img.mode == "1":
-            final_img = final_img.convert("L")
-        final_img.paste(region_img, (region.x, region.y, region.x2, region.y2))
-        return final_img
-    
     def add_region(self, region: Region):
         
         self.sub_regions.append(region)
@@ -297,186 +279,9 @@ class Page:
         raise IllegalRotationAngle()
 
     def _apply_algorithm(self, img: Image, algorithm: int) -> Image:
-        
-        if algorithm == Algorithm.NONE:
-            return img
-        if algorithm == Algorithm.GRAY:
-            return self._apply_algorithm_gray(img)
-        if algorithm == Algorithm.GRAY_WHITE:
-            return self._apply_algorithm_gray_on_white_text(img)
-        if algorithm == Algorithm.OTSU:
-            return self._apply_threshold_algorithm(img, Algorithm.OTSU)
-        if algorithm == Algorithm.SAUVOLA:
-            return self._apply_threshold_algorithm(img, Algorithm.SAUVOLA)
-        if algorithm == Algorithm.FLOYD_STEINBERG:
-            return self._apply_algorithm_floyd_steinberg(img)
-        if algorithm == Algorithm.COLOR_PAPER_QUANTIZATION:
-            return self._apply_algorithm_color_paper(img)
-        if algorithm == Algorithm.COLOR_TEXT_QUANTIZATION:
-            return self._apply_algorithm_color_text_quantization(img)
-        if algorithm == Algorithm.TWO_COLOR_QUANTIZATION:
-            return self._apply_algorithm_quantization(img)
-        if algorithm == Algorithm.BW_QUANTIZATION:
-            return self._apply_algorithm_bw_quantization(img)
-        if algorithm == Algorithm.WEISS:
-            return self._apply_algorithm_white(img)
-        raise Exception("Unknown Algorithm.")
+
+        return Page.algorithms.apply_algorithm(img, algorithm)        
     
-    def _apply_algorithm_gray(self, img: Image):
-        '''
-        TODO: The default algorithm is probably optimized for
-        photo images. This might not be the best option for
-        scanned papers. Do more research.
-        '''
-        if img.mode == "1" or img.mode == "L":
-            return img
-        
-        return img.convert("L")
-
-    def _apply_algorithm_floyd_steinberg(self, img: Image):
-        '''
-        Floyd-Steinberg is the default for PIL
-        '''
-        if img.mode == "1":
-            return img
-        
-        return img.convert("1")
-
-    def _apply_threshold_algorithm(self, img: Image, algorithm: Algorithm):
-
-        resolution = get_image_resolution(img)
-        in_array = np.asarray(self._apply_algorithm_gray(img))
-        if algorithm == Algorithm.OTSU:
-            mask = threshold_otsu(in_array)
-        elif algorithm == Algorithm.SAUVOLA:
-            mask = threshold_sauvola(in_array, window_size=11)
-        else:
-            raise Exception("Unknown threshold algorithm")
-        out_array = in_array > mask
-        img = Image.fromarray(out_array)
-        img.info['dpi'] = (resolution, resolution)
-        img.convert("1")
-        return img
-    
-    def _apply_algorithm_quantization(self, img: Image) -> Image:
-        """
-        Uses the k-means algorithm to quantize the image
-        """
-        
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-        np_array = np.array(img)
-        flattend = np.float32(np_array).reshape(-1,3)
-        condition = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
-        ret,label,center = cv2.kmeans(flattend, 2 , None, condition,10,cv2.KMEANS_RANDOM_CENTERS)
-        center = np.uint8(center)
-        final_flattend = center[label.flatten()]
-        final_img_array = final_flattend.reshape(np_array.shape)
-        new_img = Image.fromarray(final_img_array)
-        new_img.info['dpi'] = img.info['dpi']
-        return new_img
-    
-    def _apply_algorithm_gray_on_white_text(self, img: Image) -> Image:
-
-        if img.mode != "RGB":
-            img = img.convert("RGB")
-
-        mask = self._apply_algorithm_bw_quantization(img)
-        mask = mask.convert("RGB")
-        mask = mask.filter(ImageFilter.BLUR)
-
-        np_img = np.array(img)
-        np_mask = np.array(mask)
-        red, green, blue = np_mask.T
-
-        white_areas = (red == 255) & (green == 255) & (blue == 255)
-        np_img[white_areas.T] = (255, 255, 255)
-
-        final_img = Image.fromarray(np_img)
-        final_img.info['dpi'] = img.info['dpi']
-        
-        return final_img.convert("L")
-    
-    def _apply_algorithm_bw_quantization(self, img: Image):
-        
-        quantized_img = self._apply_algorithm_quantization(img)
-        colors = quantized_img.getcolors()
-        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
-        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
-        if sum1 < sum0:
-            white = colors[0][1] 
-            black = colors[1][1]
-        else: 
-            white = colors[1][1] 
-            black = colors[0][1]
-        
-        assert(quantized_img.mode == "RGB")
-        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
-
-        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
-        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
-        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
-        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
-
-        final_img = Image.fromarray(np_img)
-        final_img.info['dpi'] = img.info['dpi']
-        
-        return final_img.convert("1")
-    
-    def _apply_algorithm_color_paper(self, img: Image):
-        
-        quantized_img = self._apply_algorithm_quantization(img)
-        colors = quantized_img.getcolors()
-        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
-        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
-        if sum1 < sum0:
-            black = colors[1][1]
-        else: 
-            black = colors[0][1]
-        
-        assert(quantized_img.mode == "RGB")
-        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
-
-        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
-        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
-
-        final_img = Image.fromarray(np_img)
-        final_img.info['dpi'] = img.info['dpi']
-        
-        return final_img
-    
-    def _apply_algorithm_color_text_quantization(self, img: Image):
-        
-        quantized_img = self._apply_algorithm_quantization(img)
-        colors = quantized_img.getcolors()
-        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
-        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
-        if sum1 < sum0:
-            white = colors[0][1] 
-        else: 
-            white = colors[1][1] 
-        
-        assert(quantized_img.mode == "RGB")
-        np_img = np.array(quantized_img)   # "data" is a height x width x 4 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
-
-        # Replace white with red... (leaves alpha values alone...)
-        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
-        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
-
-        final_img = Image.fromarray(np_img)
-        final_img.info['dpi'] = img.info['dpi']
-        
-        return final_img
-
-    def _apply_algorithm_white(self, img):
-        
-        return Image.new("1", img.size, 1)
-        
-        
-
     def _get_final_rotation_angle(self):
         
         angle = self.rotation_angle + self.additional_rotation_angle
@@ -521,16 +326,34 @@ class Project(object):
 
         self.pages = pages
         self.metadata = MetaData()
-        self.current_page_no = 0
+        self.current_page_no = None
+    
+    def first_page(self):
         
+        if len(self.pages) == 0:
+            raise(NoPagesInProjectException)
+        self.current_page_no = 1
+        
+    def last_page(self):
+        
+        if len(self.pages) == 0:
+            raise(NoPagesInProjectException)
+        self.current_page_no = self.no_of_pages
+
     def next_page(self):
         
+        if len(self.pages) == 0:
+            raise(NoPagesInProjectException)
+
         if self.current_page_no + 1 > self.no_of_pages:
             self.current_page_no = 1
         else:
             self.current_page_no += 1
 
     def previous_page(self):
+
+        if len(self.pages) == 0:
+            raise(NoPagesInProjectException)
         
         if self.current_page_no <= 1:
             self.current_page_no = self.no_of_pages

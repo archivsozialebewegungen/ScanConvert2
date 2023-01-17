@@ -22,9 +22,10 @@ from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, ALGORITHM_TEXTS, Page, Algorithm, NoPagesInProjectException,\
+    Region, Page, Algorithm, NoPagesInProjectException,\
     NoRegionsOnPageException, MetaData
-from Asb.ScanConvert2.ScanConvertServices import ProjectService
+from Asb.ScanConvert2.ScanConvertServices import ProjectService,\
+    FinishingService
 from Asb.ScanConvert2.TaskRunner import TaskType, TaskManager, JobDefinition
 from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.Dialogs import MetadataDialog
@@ -179,13 +180,15 @@ class PageView(QGraphicsView):
 @singleton
 class FehPreviewer(object):
     
-    def __init__(self):
+    @inject
+    def __init__(self, finishing_service: FinishingService):
         
         self.feh = shutil.which("feh")
+        self.finishing_service = finishing_service
         
     def show(self, page: Page):
         
-        img = page.get_final_image()
+        img = self.finishing_service.create_finale_image(page)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))
@@ -384,8 +387,8 @@ class Window(QMainWindow):
     def _get_algorithm_combobox(self):
         
         algo_select = QComboBox()
-        for algo, algo_text in ALGORITHM_TEXTS.items():
-            algo_select.addItem(algo_text)
+        for algo in Algorithm:
+            algo_select.addItem("%s" % algo)
         return algo_select
         
     def _main_algo_changed(self):
@@ -395,9 +398,9 @@ class Window(QMainWindow):
         except NoPagesInProjectException:
             return
         combo_box = self.sender()
-        for value, text in ALGORITHM_TEXTS.items():
-            if combo_box.currentText() == text:
-                current_page.main_region.mode_algorithm = value
+        for algo in Algorithm:
+            if combo_box.currentText() == "%s" % algo:
+                current_page.main_region.mode_algorithm = algo
 
     def _region_algo_changed(self):
         
@@ -409,9 +412,9 @@ class Window(QMainWindow):
             return
             
         combo_box = self.sender()
-        for value, text in ALGORITHM_TEXTS.items():
-            if combo_box.currentText() == text:
-                region.mode_algorithm = value
+        for algo in Algorithm:
+            if combo_box.currentText() == "%s" % algo:
+                region.mode_algorithm = algo
 
     def _get_right_panel(self):
 
@@ -511,6 +514,7 @@ class Window(QMainWindow):
             project = pickle.load(file)
             file.close()
             self._init_from_project(project)
+            self.show_page()
         
     def _export_pdf(self):
         
@@ -630,8 +634,7 @@ class Window(QMainWindow):
         new_region.mode_algorithm = self.current_page.main_algorithm
         self.current_page.sub_regions.append(new_region)
         # TODO: Check if something is selected at all
-        self.no_of_regions = len(self.current_page.sub_regions)
-        self.current_region_no = self.no_of_regions
+        self.current_page.last_region()
         self.show_region()
     
     def delete_cancel_region(self):
@@ -649,27 +652,29 @@ class Window(QMainWindow):
         self.graphics_view.reset_rubberband()
         try:
             self.current_page.first_region()
-            self.show_region()
         except NoRegionsOnPageException:
             pass
+        self.show_region()
         
     def cancel_region(self):
         
         self.show_region()
         self.graphics_view.region_select = False
     
-    def show_photo_marking(self, project):
-        
-        self.show_page()
-    
     def mark_photos(self):
         
         photo_thread = PhotoDetectionThread(self, self.photo_detector, self.project)
         photo_thread.finished.connect(self.show_page)
         photo_thread.start()
+
+    def reset_region(self):
+        
+        self.current_page.reset_region()
+        self.graphics_view.reset_rubberband()
         
     def show_region(self):
 
+        self.graphics_view.reset_rubberband()
         try:
             self.region_number_label.setText("%d/%d" % (self.current_page.current_sub_region_no, self.current_page.no_of_sub_regions))
         except NoRegionsOnPageException:
@@ -678,11 +683,10 @@ class Window(QMainWindow):
             return
         
         region = self.current_page.current_sub_region
-        self.graphics_view.reset_rubberband()
         self.graphics_view.show_region(region)
         self.region_algo_select.setEnabled(True)
         for idx in range(0, self.main_algo_select.count()):
-            if self.region_algo_select.itemText(idx) == ALGORITHM_TEXTS[region.mode_algorithm]:
+            if self.region_algo_select.itemText(idx) == "%s" % region.mode_algorithm:
                 self.region_algo_select.setCurrentIndex(idx)
                 break
 
@@ -701,16 +705,16 @@ class Window(QMainWindow):
 
         self.main_algo_select.setEnabled(True)
         for idx in range(0, self.main_algo_select.count()):
-            if self.main_algo_select.itemText(idx) == ALGORITHM_TEXTS[self.current_page.main_region.mode_algorithm]:
+            if self.main_algo_select.itemText(idx) == "%s" % self.current_page.main_region.mode_algorithm:
                 self.main_algo_select.setCurrentIndex(idx)
                 break
 
         try:
             self.current_page.first_region()
-            self.show_region()
         except NoRegionsOnPageException:
-            self.graphics_view.reset_rubberband()
-        
+            pass
+        self.show_region()
+
     def _start_new_project(self):
         
         wizard = ProjectWizard()
@@ -727,7 +731,7 @@ class Window(QMainWindow):
     def _init_from_project(self, project: Project):
         
         self.project = project
-        self.next_page()
+        self.project.first_page()
         
     current_page = property(lambda self: self.project.current_page)
         
