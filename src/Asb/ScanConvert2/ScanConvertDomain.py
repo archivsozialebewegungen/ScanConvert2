@@ -5,6 +5,7 @@ Created on 01.11.2022
 '''
 from PIL import Image
 from enum import Enum
+from Asb.ScanConvert2.Algorithms import Algorithm
 
 class Mode(Enum):
     
@@ -12,40 +13,6 @@ class Mode(Enum):
     GRAY=2
     COLOR=3
 
-class Algorithm(Enum):
-
-    NONE=1
-    GRAY=2
-    GRAY_WHITE=3
-    OTSU=4
-    SAUVOLA=5
-    NIBLACK=6
-    FLOYD_STEINBERG=7
-    COLOR_PAPER_QUANTIZATION=8
-    COLOR_TEXT_QUANTIZATION=9
-    TWO_COLOR_QUANTIZATION=10
-    BW_QUANTIZATION=11
-    WEISS=12
-
-    
-    def __str__(self):
-        texts = {
-            Algorithm.NONE: "Modus beibehalten",
-            Algorithm.GRAY: "Graustufen",
-            Algorithm.GRAY_WHITE: "Grau auf Weiß",
-            Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
-            Algorithm.NIBLACK: "SW NIBLACK (Text fleckig)",
-            Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
-            Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
-            Algorithm.COLOR_PAPER_QUANTIZATION: "Farbiges Papier",
-            Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund",
-            Algorithm.TWO_COLOR_QUANTIZATION: "Schrift und Hintergrund farbig",
-            Algorithm.BW_QUANTIZATION: "Hintergrundfarbe entfernen",
-            Algorithm.WEISS: "Komplett weiss"
-        }
-    
-        return texts[self]
-        
 class SortType(Enum):
     
     STRAIGHT=1
@@ -92,7 +59,7 @@ class UpscalingError(Exception):
 def get_image_resolution(img: Image) -> int:
         
     if not 'dpi' in img.info:
-        return 72
+        return 300
         
     xres, yres = img.info['dpi']
     if xres == 1 or yres == 1:

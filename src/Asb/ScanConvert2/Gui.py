@@ -22,13 +22,14 @@ from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, Page, Algorithm, NoPagesInProjectException,\
+    Region, Page, NoPagesInProjectException,\
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService,\
     FinishingService
 from Asb.ScanConvert2.TaskRunner import TaskType, TaskManager, JobDefinition
 from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.Dialogs import MetadataDialog
+from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
 
 
 CREATE_REGION = "Region anlegen"
@@ -740,7 +741,7 @@ if __name__ == '__main__':
     
     app = QApplication(sys.argv)
 
-    injector = Injector()
+    injector = Injector(AlgorithmModule)
     win = injector.get(Window)
     win.show()
     sys.exit(app.exec())
