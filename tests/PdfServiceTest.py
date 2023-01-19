@@ -14,6 +14,7 @@ from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from Base import BaseTest
 from fitz.fitz import Document
 import tempfile
+from Asb.ScanConvert2.Algorithms import AlgorithmModule
 
 numbers_as_text = {
     1: "eins",
@@ -26,6 +27,11 @@ numbers_as_text = {
     8: "acht"
     }
 class PdfServiceTest(BaseTest):
+    
+    def setUp(self):
+        BaseTest.setUp(self)
+        injector = Injector(AlgorithmModule)
+        self.project_service = injector.get(ProjectService)
 
     def assert_project(self, project_service, project):
 
@@ -37,24 +43,21 @@ class PdfServiceTest(BaseTest):
             for i in range(0,8):
                 self.assertIn(numbers_as_text[i+1], document.get_page_text(i))
 
-    def notestPdfServiceSingle(self):
+    def testPdfServiceSingle(self):
         
         scans = []
         for i in range(1, 9):
             scans.append(Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite%s.png" % i)))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  1,
                                                  SortType.STRAIGHT,
                                                  0,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
         
-    def notestPdfServiceDouble1(self):
+    def testPdfServiceDouble1(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite1.png")))
@@ -63,18 +66,15 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite6_7.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Singlefiles", "Seite8.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  0,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
         
-    def notestPdfServiceDouble2(self):
+    def testPdfServiceDouble2(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite8_1.png")))
@@ -82,18 +82,15 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  0,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
-    def notestPdfServiceDouble270(self):
+    def testPdfServiceDouble270(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles270", "Seite8_1.png")))
@@ -101,18 +98,15 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles270", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles270", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  270,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
-    def notestPdfServiceDouble180(self):
+    def testPdfServiceDouble180(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles180", "Seite8_1.png")))
@@ -120,18 +114,15 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles180", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles180", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  180,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
-    def notestPdfServiceDouble90(self):
+    def testPdfServiceDouble90(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite8_1.png")))
@@ -139,16 +130,13 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  90,
-                                                 False,
-                                                 Algorithm.OTSU)
+                                                 False)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
     def testPdfServiceDoublealternating(self):
         
@@ -158,18 +146,15 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles180", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  0,
-                                                 True,
-                                                 Algorithm.OTSU)
+                                                 True)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
-    def notestPdfServiceDouble90alternating(self):
+    def testPdfServiceDouble90alternating(self):
         
         scans = []
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite8_1.png")))
@@ -177,16 +162,13 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles270", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  90,
-                                                 True,
-                                                 Algorithm.OTSU)
+                                                 True)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
     def testPdfServiceDouble180alternating(self):
         
@@ -196,16 +178,13 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles180", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  0,
-                                                 True,
-                                                 Algorithm.OTSU)
+                                                 True)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
 
     def testPdfServiceDouble270alternating(self):
         
@@ -215,16 +194,14 @@ class PdfServiceTest(BaseTest):
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles270", "Seite4_5.png")))
         scans.append(Scan(os.path.join(self.test_file_dir, "Doublefiles90", "Seite6_7.png")))
         
-        injector = Injector()
-        project_service = injector.get(ProjectService)
-        project = project_service.create_project(scans,
+        project = self.project_service.create_project(scans,
                                                  2,
                                                  SortType.STRAIGHT,
                                                  270,
-                                                 True,
-                                                 Algorithm.OTSU)
+                                                 True)
 
-        self.assert_project(project_service, project)
+        self.assert_project(self.project_service, project)
+        
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testPdfService']
     unittest.main()

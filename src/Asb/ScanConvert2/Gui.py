@@ -16,20 +16,20 @@ from PySide6.QtGui import QPixmap, QAction, QIcon
 from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox,\
+    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox, \
     QButtonGroup, QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
 
+from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
+from Asb.ScanConvert2.Dialogs import MetadataDialog
+from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, Page, NoPagesInProjectException,\
+    Region, Page, NoPagesInProjectException, \
     NoRegionsOnPageException, MetaData
-from Asb.ScanConvert2.ScanConvertServices import ProjectService,\
+from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
 from Asb.ScanConvert2.TaskRunner import TaskType, TaskManager, JobDefinition
-from Asb.ScanConvert2.PictureDetector import PictureDetector
-from Asb.ScanConvert2.Dialogs import MetadataDialog
-from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
 
 
 CREATE_REGION = "Region anlegen"

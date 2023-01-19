@@ -7,10 +7,11 @@ import os
 
 from PySide6.QtWidgets import QVBoxLayout, QLabel, QRadioButton, QCheckBox, \
     QWizardPage, QAbstractItemView, QTableWidget, QTableWidgetItem, QFileDialog, \
-    QHBoxLayout, QPushButton, QWizard, QLineEdit, QPlainTextEdit
+    QHBoxLayout, QPushButton, QWizard
 
 from Asb.ScanConvert2.ScanConvertDomain import Scan, \
-    SortType, MetaData
+    SortType
+
 
 SCANS_PAGE = 1
 PAGE_PER_SCAN_PAGE = 2

@@ -7,13 +7,16 @@ while the current tasks are running.
 
 @author: michael
 '''
-from Asb.ScanConvert2.ScanConvertServices import ProjectService
-from injector import singleton, inject
-from Asb.ScanConvert2.ScanConvertDomain import Project, Region, Algorithm
 from enum import Enum
 import threading
 import traceback
+
+from injector import singleton, inject
+
 from Asb.ScanConvert2.PictureDetector import PictureDetector
+from Asb.ScanConvert2.ScanConvertDomain import Project
+from Asb.ScanConvert2.ScanConvertServices import ProjectService
+
 
 class TaskType(Enum):
     

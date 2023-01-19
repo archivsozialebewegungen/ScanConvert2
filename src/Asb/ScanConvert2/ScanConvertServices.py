@@ -5,21 +5,17 @@ Created on 02.11.2022
 '''
 import io
 
-from PIL import Image, ImageFilter
+from PIL import Image
 from injector import singleton, inject
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
-from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
-    threshold_niblack
 
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    SortType, Page, Region, get_image_resolution, Algorithm
-import numpy as np
-import cv2
-from Asb.ScanConvert2.Algorithms import AlgorithmImplementations
+    SortType, Page, Region
+from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm
 
 
 INVISIBLE = 3
@@ -162,7 +158,7 @@ class FinishingService(object):
 
     def apply_algorithm(self, img: Image, algorithm: Algorithm):
         
-        return self.algorithm_implementations[algorithm].transform(self, img)
+        return self.algorithm_implementations[algorithm].transform(img)
 
 @singleton
 class PdfService:
@@ -188,7 +184,6 @@ class PdfService:
         page_counter = 0
         for page in project.pages:
             page_counter += 1
-            print("Processing page %d" % page_counter)
             if page.skip_page:
                 continue
             image = self.finishing_service.create_finale_image(page)

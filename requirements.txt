@@ -1,3 +1,4 @@
+coverage==7.0.5
 imageio==2.22.4
 injector==0.20.1
 networkx==2.8.8

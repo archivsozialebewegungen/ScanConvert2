@@ -3,9 +3,11 @@ Created on 09.01.2023
 
 @author: michael
 '''
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout,\
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
     QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit
+
 from Asb.ScanConvert2.ScanConvertDomain import MetaData
+
 
 class MetadataDialog(QDialog):
     '''

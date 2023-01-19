@@ -6,7 +6,7 @@ Created on 04.11.2022
 from injector import inject, singleton
 
 from Asb.ScanConvert2.ScanConvertDomain import Page, Region, \
-    Scan, Algorithm, SortType, Project
+    Scan, SortType, Project
 
 class NumberOfPagesDetector:
     

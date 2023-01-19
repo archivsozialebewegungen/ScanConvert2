@@ -10,13 +10,16 @@ Created on 18.01.2023
 
 @author: michael
 '''
+from enum import Enum
+
 from PIL import Image, ImageFilter
-import numpy as np
-from skimage.filters.thresholding import threshold_otsu, threshold_sauvola,\
-    threshold_niblack
 import cv2
 from injector import Module, BoundKey, provider, singleton
-from enum import Enum
+from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
+    threshold_niblack
+
+import numpy as np
+
 
 AlgorithmImplementations = BoundKey("algorithm implementations")
 
@@ -111,11 +114,11 @@ class ThresholdAlgorithm(ModeTransformationAlgorithm):
     to a PIL image.
     """
     
-    def apply_cv2_mask(self, img:Image, mask_implementation, **args)->Image:
+    def apply_cv2_mask(self, img:Image, mask_implementation, **nargs)->Image:
         
         resolution = self.get_image_resolution(img)
         in_array = np.asarray(img.convert("L"))
-        mask = mask_implementation(in_array, args)
+        mask = mask_implementation(in_array, **nargs)
         out_array = in_array > mask
         img = Image.fromarray(out_array)
         img.info['dpi'] = (resolution, resolution)

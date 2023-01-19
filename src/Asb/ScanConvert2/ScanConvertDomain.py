@@ -3,9 +3,12 @@ Created on 01.11.2022
 
 @author: michael
 '''
-from PIL import Image
 from enum import Enum
+
+from PIL import Image
+
 from Asb.ScanConvert2.Algorithms import Algorithm
+
 
 class Mode(Enum):
     
