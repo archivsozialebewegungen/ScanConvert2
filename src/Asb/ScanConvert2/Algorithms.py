@@ -167,8 +167,7 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
         Uses the k-means algorithm to quantize the image for two colors
         """
         
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+        img = img.convert("RGB")
         np_array = np.array(img)
         flattend = np.float32(np_array).reshape(-1,3)
         condition = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,20,1.0)
@@ -186,38 +185,6 @@ class TwoColors(QuantizationAlgorithm):
     
     def transform(self, img:Image)->Image:
         return self._apply_quantization(img)
-    
-class BlackWhiteQuantization(QuantizationAlgorithm):
-    """
-    This is not very useful since the result is very similar to
-    the Otsu algorithm, but much slower
-    """
-    
-    def transform(self, img:Image)->Image:
-        
-        quantized_img = self._apply_quantization(img)
-        colors = quantized_img.getcolors()
-        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
-        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
-        if sum1 < sum0:
-            white = colors[0][1] 
-            black = colors[1][1]
-        else: 
-            white = colors[1][1] 
-            black = colors[0][1]
-        
-        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
-
-        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
-        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
-        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
-        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
-
-        final_img = Image.fromarray(np_img)
-        final_img.info['dpi'] = img.info['dpi']
-        
-        return final_img.convert("1")
 
 class ColorTextOnWhite(QuantizationAlgorithm):
     """
@@ -309,7 +276,9 @@ class White(ModeTransformationAlgorithm):
     """
     
     def transform(self, img:Image)->Image:
-        return Image.new("1", img.size, 1)
+        new_img = Image.new("1", img.size, 1)
+        new_img.info['dpi'] = img.info['dpi']
+        return new_img
 
     
 class AlgorithmModule(Module):

@@ -10,4 +10,4 @@ DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 source $DIR/../venv/bin/activate
 export PYTHONPATH=$DIR/../src:$PYTHONPATH
-python3 $DIR/../src/Asb/ScanConvert2/Gui.py
+python3 $DIR/../src/Asb/ScanConvert2/GUI/Gui.py

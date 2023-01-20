@@ -98,7 +98,6 @@ class OcrRunner(object):
             line_data.bbox = self._get_bounding_box(line, page_data)
             line_data.baseline_coefficients = self._get_baseline_coefficients(line)
             line_data.textangle = self._get_textangle(line)
-            print("Textangle: %d" % line_data.textangle)
             assert(line_data.textangle == 90 or line_data.textangle == 0) # No other angles implemented
             line_data = self._add_words_to_line(line, line_data, page_data)
             page_data.lines.append(line_data)

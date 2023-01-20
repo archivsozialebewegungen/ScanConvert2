@@ -13,7 +13,7 @@ class PictureDetectionTest(BaseTest):
     def testFile1(self):
         
         self.detector = PictureDetector()
-        img = Image.open(os.path.join(self.test_file_dir, "picture_detection.tif"))
+        img = Image.open(os.path.join(self.test_file_dir, "PictureDetection", "picture_detection.tif"))
         for picture in self.detector.find_pictures(img):
             blank = Image.new("1", (picture[2]-picture[0], picture[3]-picture[1]), color=0)
             img.paste(blank, (picture[0], picture[1]))

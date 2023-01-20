@@ -42,11 +42,9 @@ class PictureDetector(object):
         
         part = img.crop(bbox)
         histogram = part.histogram()
-        #print(histogram)
         if histogram[255] == 0:
             return True
         ratio = 1.0 * histogram[0] / histogram[255]
-        print(ratio)
         return ratio > 0.6
     
     def _get_areas(self, img: Image) -> []:

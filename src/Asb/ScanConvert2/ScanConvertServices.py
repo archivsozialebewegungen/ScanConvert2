@@ -98,7 +98,7 @@ class OCRService(object):
 
         text_origin_x = word.bbox[0] * 72.0 / page.dpi
         text_origin_y = word.bbox[1] * 72.0 / page.dpi
-        if line.baseline_coefficients[0] != 1.0 and line.baseline_coefficients[1] != 0.0:
+        if not(line.baseline_coefficients[0] == 1.0 and line.baseline_coefficients[1] == 0.0):
             # Wir nutzen die Baseline-Informationen von tesseract
             # Die beiden Koeffizienten definieren eine lineare Gleichung für
             # die Baseline der Zeile        

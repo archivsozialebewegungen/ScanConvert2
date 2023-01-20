@@ -215,7 +215,6 @@ class Page:
         if target_resolution != self.scan.resolution:
             img = self._change_resolution(img, self.scan.resolution, target_resolution)
         if self.final_rotation_angle != 0:
-            print(self.final_rotation_angle)
             img = self._rotate_image(img, self.final_rotation_angle)
         return img
             

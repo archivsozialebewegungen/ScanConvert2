@@ -12,5 +12,5 @@ class BaseTest(unittest.TestCase):
 
     def setUp(self):
         
-        self.test_file_dir = os.path.join(os.path.dirname(__file__), "Files")
+        self.test_file_dir = os.path.join(os.path.dirname(__file__), "SampleFiles")
 
