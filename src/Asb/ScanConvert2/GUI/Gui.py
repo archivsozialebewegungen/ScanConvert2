@@ -304,7 +304,7 @@ class Window(QMainWindow):
     
     def _toggle_skip_page(self):
         
-        if self.current_page_no is None:
+        if self.project is None:
             return
         self.current_page.skip_page = self.skip_page_checkbox.isChecked()
         
@@ -515,17 +515,18 @@ class Window(QMainWindow):
             project = pickle.load(file)
             file.close()
             self._init_from_project(project)
-            self.show_page()
         
     def _export_pdf(self):
         
-        file_base = QFileDialog.getSaveFileName(parent=self,
+        file_name = QFileDialog.getSaveFileName(parent=self,
                                                 caption="Pdf-Datei für das Speichern angeben",
                                                 filter="Pdf-Dateien (*.pdf)")
 
-        if file_base[0] != "":
-            job = JobDefinition(self.project, TaskType.PDF_EXPORT,
-                                file_base=file_base[0])
+        if file_name[0] != "":
+            job = JobDefinition(
+                self,
+                lambda: self.project_service.export_pdf(self.project, file_name[0])
+            )
             self.task_manager.add_task(job)
             
     def show_job_status(self):
@@ -661,13 +662,29 @@ class Window(QMainWindow):
         
         self.show_region()
         self.graphics_view.region_select = False
+
+    def run_photo_detection(self, page: Page):
+
+        photo_bboxes = self.photo_detector.find_pictures(page.get_base_image())
+        if len(photo_bboxes) == 0:
+            return
+        
+        for bbox in photo_bboxes:
+            page.add_region(Region(bbox[0], bbox[1],
+                                           bbox[2] - bbox[0], bbox[3] - bbox[1],
+                                           Algorithm.FLOYD_STEINBERG))
+        page.current_sub_region_no = page.no_of_sub_regions
+        if page == self.current_page:
+            self.show_page()
     
     def mark_photos(self):
         
-        photo_thread = PhotoDetectionThread(self, self.photo_detector, self.project)
-        photo_thread.finished.connect(self.show_page)
-        photo_thread.start()
-
+        job_definition = JobDefinition(
+            self,
+            lambda: self.run_photo_detection(self.current_page)
+        )
+        self.task_manager.add_task(job_definition)
+        
     def reset_region(self):
         
         self.current_page.reset_region()
@@ -733,6 +750,7 @@ class Window(QMainWindow):
         
         self.project = project
         self.project.first_page()
+        self.show_page()
         
     current_page = property(lambda self: self.project.current_page)
         
