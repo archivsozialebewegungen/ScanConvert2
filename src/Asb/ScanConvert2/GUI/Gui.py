@@ -450,17 +450,22 @@ class Window(QMainWindow):
         save_action = QAction(QIcon('save.png'), '&Speichern', self)
         save_action.setShortcut('Ctrl+S')
         save_action.setStatusTip('Project speichern')
-        save_action.triggered.connect(self._save_project)
+        save_action.triggered.connect(self.cb_save_project)
 
         load_action = QAction(QIcon('load.png'), '&Laden', self)
         load_action.setShortcut('Ctrl+L')
         load_action.setStatusTip('Projekt laden')
-        load_action.triggered.connect(self._load_project)
+        load_action.triggered.connect(self.cb_load_project)
 
         pdf_export_action = QAction(QIcon('file.png'), '&Pdf exportieren', self)
         pdf_export_action.setShortcut('Ctrl+P')
         pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
-        pdf_export_action.triggered.connect(self._export_pdf)
+        pdf_export_action.triggered.connect(self.cb_export_pdf)
+
+        tif_export_action = QAction(QIcon('file.png'), '&Tiff-Archiv exportieren', self)
+        tif_export_action.setShortcut('Ctrl+T')
+        tif_export_action.setStatusTip('Das Projekt als Tiff-Archiv exportieren')
+        tif_export_action.triggered.connect(self.cb_export_tif)
 
         edit_metadata_action = QAction(QIcon('file.png'), '&Metadaten', self)
         edit_metadata_action.setShortcut('Ctrl+M')
@@ -475,6 +480,7 @@ class Window(QMainWindow):
         fileMenu.addAction(exit_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
+        exportMenu.addAction(tif_export_action)
         exportMenu.addAction(edit_metadata_action)
     
     def _edit_metadata(self):
@@ -490,7 +496,7 @@ class Window(QMainWindow):
         except NoPagesInProjectException:
             pass
         
-    def _save_project(self):
+    def cb_save_project(self):
         
         file_selection = QFileDialog.getSaveFileName(parent=self,
                                                 caption="ScanConvert2-Datei für das Speichern angeben",
@@ -499,24 +505,20 @@ class Window(QMainWindow):
         if new_file_name == "":
             return
         
-        if new_file_name[-4:] != '.scp':
-            new_file_name += ".scp"
-        file = open(new_file_name, "wb")
-        pickle.dump(self.project, file)
-        file.close()
+        self.project_service.save_project(new_file_name, self.project)
     
-    def _load_project(self):
+    def cb_load_project(self):
         
         file_selection = QFileDialog.getOpenFileName(parent=self,
                                                 caption="ScanConvert2-Datei für das Laden auswählen",
                                                 filter="ScanConvert2-Dateien (*.scp)")
-        if file_selection[0] != "":
-            file = open(file_selection[0], "rb")
-            project = pickle.load(file)
-            file.close()
-            self._init_from_project(project)
+        if file_selection[0] == "":
+            return
         
-    def _export_pdf(self):
+        project = self.project_service.load_project(file_selection[0])
+        self._init_from_project(project)
+        
+    def cb_export_pdf(self):
         
         file_name = QFileDialog.getSaveFileName(parent=self,
                                                 caption="Pdf-Datei für das Speichern angeben",
@@ -529,6 +531,19 @@ class Window(QMainWindow):
             )
             self.task_manager.add_task(job)
             
+    def cb_export_tif(self):
+        
+        file_name = QFileDialog.getSaveFileName(parent=self,
+                                                caption="Zip-Datei für das Speichern angeben",
+                                                filter="Zip-Dateien (*.zip)")
+
+        if file_name[0] != "":
+            job = JobDefinition(
+                self,
+                lambda: self.project_service.export_tif(self.project, file_name[0])
+            )
+            self.task_manager.add_task(job)
+
     def show_job_status(self):
         
         total = len(self.task_manager.finished_tasks) + len(self.task_manager.unfinished_tasks)
