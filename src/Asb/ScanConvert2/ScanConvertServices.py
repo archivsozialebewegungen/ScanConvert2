@@ -222,7 +222,7 @@ class FinishingService(object):
     def apply_region(self, region: Region, final_img: Image, img: Image, target_resolution) -> Image:
         
         region_img = img.crop((region.x, region.y, region.x2, region.y2))
-        region_img = self._apply_algorithm(region_img, region.mode_algorithm)
+        region_img = self.apply_algorithm(region_img, region.mode_algorithm)
         if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
             final_img = final_img.convert("RGBA")
         if region_img.mode == "RGB" and (final_img.mode == "L" or final_img.mode == "1"):
