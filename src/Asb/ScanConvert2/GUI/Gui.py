@@ -4,7 +4,6 @@ Created on 06.11.2022
 @author: michael
 '''
 import os
-import pickle
 import shutil
 import sys
 import tempfile
@@ -27,9 +26,10 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
-from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, TaskType, JobDefinition
-from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog
+from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
+from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
+from networkx.algorithms.bipartite.projection import project
 
 
 CREATE_REGION = "Region anlegen"
@@ -211,7 +211,7 @@ class PhotoDetectionThread(QThread):
     def run(self):
         
         current_page = self.project.current_page
-        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image())
+        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image(self.project.project_properties.pdf_resolution))
         if len(photo_bboxes) == 0:
             return
         
@@ -241,6 +241,7 @@ class Window(QMainWindow):
         self.previewer = previewer
         self.photo_detector = photo_detector
         self.metadata_dialog = MetadataDialog(self)
+        self.properties_dialog = PropertiesDialog(self)
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -470,7 +471,12 @@ class Window(QMainWindow):
         edit_metadata_action = QAction(QIcon('file.png'), '&Metadaten', self)
         edit_metadata_action.setShortcut('Ctrl+M')
         edit_metadata_action.setStatusTip('Metadaten bearbeiten')
-        edit_metadata_action.triggered.connect(self._edit_metadata)
+        edit_metadata_action.triggered.connect(self.cb_edit_metadata)
+
+        edit_properties_action = QAction(QIcon('file.png'), '&Einstellungen', self)
+        edit_properties_action.setShortcut('Ctrl+E')
+        edit_properties_action.setStatusTip('Projekteinstellungen bearbeiten')
+        edit_properties_action.triggered.connect(self.cb_edit_properties)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
@@ -482,13 +488,20 @@ class Window(QMainWindow):
         exportMenu.addAction(pdf_export_action)
         exportMenu.addAction(tif_export_action)
         exportMenu.addAction(edit_metadata_action)
+        exportMenu.addAction(edit_properties_action)
     
-    def _edit_metadata(self):
+    def cb_edit_metadata(self):
         
         self.metadata_dialog.metadata = self.project.metadata
         if self.metadata_dialog.exec():
             self.project.metadata = self.metadata_dialog.metadata
     
+    def cb_edit_properties(self):
+        
+        self.properties_dialog.project_properties = self.project.project_properties
+        if self.properties_dialog.exec():
+            self.project.project_properties = self.properties_dialog.project_properties
+
     def _preview_current_page(self):
         
         try:
@@ -629,7 +642,7 @@ class Window(QMainWindow):
         else:
             self.new_region_button.setText(CREATE_REGION)
             self.delete_region_button.setText(DELETE_REGION)
-            self.apply_region()
+            self._apply_region()
 
             
     def create_region(self):
@@ -640,7 +653,7 @@ class Window(QMainWindow):
         self.graphics_view.reset_rubberband()
     
     
-    def apply_region(self):
+    def _apply_region(self):
         """
         Selection is finished and we add the selected region to the
         sub regions of the page
@@ -680,7 +693,7 @@ class Window(QMainWindow):
 
     def run_photo_detection(self, page: Page):
 
-        photo_bboxes = self.photo_detector.find_pictures(page.get_base_image())
+        photo_bboxes = self.photo_detector.find_pictures(page.get_base_image(self.project.project_properties.pdf_resolution))
         if len(photo_bboxes) == 0:
             return
         
@@ -734,7 +747,7 @@ class Window(QMainWindow):
         self.skip_page_checkbox.setChecked(self.current_page.skip_page)
         if self.current_page.additional_rotation_angle != self._get_rotation():
             self._set_rotation(self.current_page.additional_rotation_angle)
-        self.graphics_view.set_page(self.current_page.get_base_image())
+        self.graphics_view.set_page(self.current_page.get_base_image(self.project.project_properties.pdf_resolution))
 
         self.main_algo_select.setEnabled(True)
         for idx in range(0, self.main_algo_select.count()):

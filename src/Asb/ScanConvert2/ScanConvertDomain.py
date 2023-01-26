@@ -74,6 +74,16 @@ def get_image_resolution(img: Image) -> int:
     # newer versions of Pillow return a float
     return round(xres)
 
+class ProjectProperties(object):
+    
+    def __init__(self):
+        
+        self.pdf_resolution = 300
+        self.tif_resolution = 300
+        self.run_ocr = True
+        self.create_pdfa = True
+        self.ocr_lang = "deu"
+
 class Region(object):
     '''
     A simple data class to describe a part of a scan
@@ -204,7 +214,7 @@ class Page:
         else:
             self.current_sub_region_no -= 1
 
-    def get_base_image(self, target_resolution=300) -> Image:
+    def get_base_image(self, target_resolution) -> Image:
         
         if target_resolution > self.scan.resolution:
             pass
@@ -249,7 +259,7 @@ class Page:
 
     def _apply_algorithm(self, img: Image, algorithm: int) -> Image:
 
-        return Page.algorithms.apply_algorithm(img, algorithm)        
+        return Page.algorithms._apply_algorithm(img, algorithm)        
     
     def _get_final_rotation_angle(self):
         
@@ -296,6 +306,7 @@ class Project(object):
         self.pages = pages
         self.metadata = MetaData()
         self.current_page_no = None
+        self.project_properties = ProjectProperties()
     
     def first_page(self):
         

@@ -38,7 +38,7 @@ class OCRServiceTest(BaseTest):
         pdf.drawImage(img_reader, 0, 0, width_in_dots * inch / 300, height_in_dots * inch / 300)
 
         Asb.ScanConvert2.ScanConvertServices.INVISIBLE = 0
-        pdf = ocr_service.add_ocrresult_to_pdf(img, pdf)
+        pdf = ocr_service.add_ocrresult_to_pdf(img, pdf, "deu")
         
         pdf.showPage()
         pdf.save()
