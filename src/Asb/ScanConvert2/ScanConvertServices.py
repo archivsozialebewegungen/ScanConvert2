@@ -4,25 +4,25 @@ Created on 02.11.2022
 @author: michael
 '''
 import io
+import os
+import pickle
+import shutil
+import tempfile
+from zipfile import ZipFile
 
 from PIL import Image
+from PIL.TiffImagePlugin import ImageFileDirectory_v2
 from injector import singleton, inject
+import ocrmypdf
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
+from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     SortType, Page, Region
-from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm
-import tempfile
-import os
-from zipfile import ZipFile
-from PIL.TiffImagePlugin import ImageFileDirectory_v2
-import pickle
-import ocrmypdf
-import shutil
 
 
 INVISIBLE = 3
@@ -284,6 +284,7 @@ class PdfService:
             pdf.save()
             # Convert to pdfa and optimize graphics
             if project.project_properties.create_pdfa:
+                #ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
                 ocrmypdf.ocr(temp_file, self._get_file_name(filebase), skip_text=True)
             else:
                 shutil.copy(temp_file, self._get_file_name(filebase))

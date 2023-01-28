@@ -30,6 +30,7 @@ from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
 from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
 from networkx.algorithms.bipartite.projection import project
+import logging
 
 
 CREATE_REGION = "Region anlegen"
@@ -497,6 +498,9 @@ class Window(QMainWindow):
             self.project.metadata = self.metadata_dialog.metadata
     
     def cb_edit_properties(self):
+        
+        if self.project is None:
+            return
         
         self.properties_dialog.project_properties = self.project.project_properties
         if self.properties_dialog.exec():

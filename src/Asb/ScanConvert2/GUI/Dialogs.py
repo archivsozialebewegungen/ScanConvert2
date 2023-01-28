@@ -4,10 +4,11 @@ Created on 09.01.2023
 @author: michael
 '''
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
-    QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox
+    QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox
 
 from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties
 from PySide6.QtCore import QRect
+import pytesseract
 
 
 class MetadataDialog(QDialog):
@@ -81,20 +82,22 @@ class PropertiesDialog(QDialog):
     '''
     Dialog zum Erfassen der Properties
     '''
-
-
     def __init__(self, parent):
         super().__init__(parent)
         self.setWindowTitle("Metadaten für das Projekt")
-        self.setGeometry(40, 40, 600, 400)
+        self.setGeometry(40, 40, 500, 200)
+        
+        self.available_languages = pytesseract.get_languages(config='')
+        self.available_languages.remove("osd")
         
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-
         buttonBox = QDialogButtonBox(QBtn)
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
 
         layout = QVBoxLayout()
+        label = QLabel('<font size="+2"><b>Projekteigenschaften:</b></font>')
+        layout.addWidget(label)
         line_inputs = QHBoxLayout()
         layout.addLayout(line_inputs)
         label_column = QVBoxLayout()
@@ -112,15 +115,21 @@ class PropertiesDialog(QDialog):
         self.tif_resolution_input = QLineEdit(self)
         input_column.addWidget(self.tif_resolution_input)
         
-        label = QLabel("OCR ausführen:")
+        label = QLabel("Texterkennung ausführen:")
         label_column.addWidget(label)
         self.run_ocr_checkbox = QCheckBox(self)
         input_column.addWidget(self.run_ocr_checkbox)
         
-        label = QLabel("OCR Sprache:")
+        label = QLabel("Sprache für die Texterkennung:")
         label_column.addWidget(label)
-        self.ocr_lang_input = QLineEdit(self)
-        input_column.addWidget(self.ocr_lang_input)
+        self.ocr_lang_select = QComboBox()
+        self.ocr_lang_select.addItems(self.available_languages)
+        input_column.addWidget(self.ocr_lang_select)
+        
+        label = QLabel("PDF/A-Datei erstellen und Graphiken optimieren:")
+        label_column.addWidget(label)
+        self.create_pdfa_checkbox = QCheckBox(self)
+        input_column.addWidget(self.create_pdfa_checkbox)
         
         layout.addWidget(buttonBox)
         
@@ -138,8 +147,8 @@ class PropertiesDialog(QDialog):
         except:
             pass
         properties.run_ocr = self.run_ocr_checkbox.isChecked()
-        if self.ocr_lang_input.text() in ("deu", "fra", "eng"):
-            properties.ocr_lang = self.ocr_lang_input.text()
+        properties.ocr_lang = self.ocr_lang_select.currentText()
+        properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
         return properties
         
     def _set_properties(self, properties: ProjectProperties):
@@ -147,6 +156,10 @@ class PropertiesDialog(QDialog):
         self.pdf_resolution_input.setText("%s" % properties.pdf_resolution)
         self.tif_resolution_input.setText("%s" % properties.tif_resolution)
         self.run_ocr_checkbox.setChecked(properties.run_ocr)
-        self.ocr_lang_input.setText(properties.ocr_lang)
+        for idx in range(0, len(self.available_languages)):
+            if self.ocr_lang_select.itemText(idx) == "%s" % properties.ocr_lang:
+                self.ocr_lang_select.setCurrentIndex(idx)
+                break
+        self.create_pdfa_checkbox.setChecked(properties.create_pdfa)
 
     project_properties = property(_get_properties, _set_properties)
