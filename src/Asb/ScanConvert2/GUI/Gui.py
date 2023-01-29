@@ -47,9 +47,9 @@ class FehPreviewer(object):
         self.feh = shutil.which("feh")
         self.finishing_service = finishing_service
         
-    def show(self, page: Page):
+    def show(self, page: Page, resolution: int):
         
-        img = self.finishing_service.create_finale_image(page)
+        img = self.finishing_service.create_finale_image(page, resolution)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))
@@ -368,7 +368,7 @@ class Window(QMainWindow):
     def _preview_current_page(self):
         
         try:
-            self.previewer.show(self.project.current_page)
+            self.previewer.show(self.project.current_page, self.project.project_properties.pdf_resolution)
         except NoPagesInProjectException:
             pass
         
