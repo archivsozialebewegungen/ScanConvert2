@@ -7,17 +7,18 @@ import os
 
 from PySide6.QtWidgets import QVBoxLayout, QLabel, QRadioButton, QCheckBox, \
     QWizardPage, QAbstractItemView, QTableWidget, QTableWidgetItem, QFileDialog, \
-    QHBoxLayout, QPushButton, QWizard
+    QHBoxLayout, QPushButton, QWizard, QLineEdit
 
 from Asb.ScanConvert2.ScanConvertDomain import Scan, \
     SortType
 
 
 SCANS_PAGE = 1
-PAGE_PER_SCAN_PAGE = 2
-SINGLE_SORT_TYPE_PAGE = 3
-DOUBLE_SORT_TYPE_PAGE = 4
-SCAN_ROTATION_PAGE = 5
+DEFAULT_RESOLUTION_PAGE = 2
+PAGE_PER_SCAN_PAGE = 3
+SINGLE_SORT_TYPE_PAGE = 4
+DOUBLE_SORT_TYPE_PAGE = 5
+SCAN_ROTATION_PAGE = 6
 
 class ProjectWizard(QWizard):
         
@@ -27,6 +28,7 @@ class ProjectWizard(QWizard):
         self.pages = {
             PAGE_PER_SCAN_PAGE: ProjectWizardPagePagesPerScan(self),
             SCANS_PAGE: ProjectWizardPageScans(self),
+            DEFAULT_RESOLUTION_PAGE: ProjectWizardPageDefaultResolution(self),
             SCAN_ROTATION_PAGE: ProjectWizardScanRotation(self),
             SINGLE_SORT_TYPE_PAGE: ProjectWizardPageSingleSortType(self),
             DOUBLE_SORT_TYPE_PAGE: ProjectWizardPageDoubleSortType(self),
@@ -42,9 +44,19 @@ class ProjectWizard(QWizard):
             return self.pages[SINGLE_SORT_TYPE_PAGE].result
         else:
             return self.pages[DOUBLE_SORT_TYPE_PAGE].result
+        
+    def _get_scans(self):
+        """
+        We need to make sure that each scan has a resolution
+        """
+        
+        for scan in self.pages[SCANS_PAGE].scans:
+            if scan.resolution is None:
+                scan.resolution = self.pages[DEFAULT_RESOLUTION_PAGE].resolution
+        return self.pages[SCANS_PAGE].scans
                      
     pages_per_scan = property(lambda self: self.pages[PAGE_PER_SCAN_PAGE].result)
-    scans = property(lambda self: self.pages[SCANS_PAGE].scans)
+    scans = property(_get_scans)
     scan_rotation = property(lambda self: self.pages[SCAN_ROTATION_PAGE].result)
     rotation_alternating = property(lambda self: self.pages[SCAN_ROTATION_PAGE].alternating)
     sort_type = property(_get_sort_type)
@@ -80,7 +92,44 @@ class AbstractRadioButtonProjectWizardPage(QWizardPage):
         radiobutton = self.sender()
         self.result = self.buttons[radiobutton.text()]
 
+class ProjectWizardPageDefaultResolution(QWizardPage):
+    
+    def __init__(self, parent):
+        
+        super().__init__(parent)
+        self.wizard = parent
+        
+        self.setTitle("Auflösung der Scans")
+        self.setSubTitle("Alle oder einige Scans enthalten keine Information\n" +
+                         "über die Auflösung.")
+        
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Bitte geben Sie die Auflösung in\n" +
+                         "dots per inch (dpi) an."))
+        input_layout = QHBoxLayout()
+        input_layout.addWidget(QLabel("Auflösung (dpi):"))
+        self.resolution_input = QLineEdit()
+        input_layout.addWidget(self.resolution_input)
+        layout.addLayout(input_layout)
+        self.setLayout(layout)
+        
+    def _get_resolution(self):
+        
+        return int(self.resolution_input.text())
+    
+    def nextId(self):
+        
+        try:
+            if self.resolution > 0:
+                return PAGE_PER_SCAN_PAGE
+        except:
+            pass
 
+        self.resolution_input.setText("")
+        return DEFAULT_RESOLUTION_PAGE
+        
+    resolution = property(_get_resolution)
+    
 class ProjectWizardPageSingleSortType(AbstractRadioButtonProjectWizardPage):
     
     def __init__(self, parent):
@@ -201,7 +250,7 @@ class ProjectWizardPageScans(QWizardPage):
 
     def add_files(self):
         
-        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.jpeg *.tif *.tiff *.gif *.png)")
+        filenames = QFileDialog.getOpenFileNames(filter="Graphikdateien (*.jpg *.jpeg *.tif *.tiff *.gif *.png *.pnm *.ppm)")
         for filename in filenames[0]:
             self.append_fileinfo(filename)
 
@@ -277,3 +326,10 @@ class ProjectWizardPageScans(QWizardPage):
         self.filename_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         
         return self.filename_table
+
+    def nextId(self, *args, **kwargs):
+        
+        for scan in self.scans:
+            if scan.resolution is None:
+                return DEFAULT_RESOLUTION_PAGE
+        return PAGE_PER_SCAN_PAGE

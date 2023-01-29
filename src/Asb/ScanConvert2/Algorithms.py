@@ -30,7 +30,7 @@ class Algorithm(Enum):
     GRAY_WHITE=3
     OTSU=4
     SAUVOLA=5
-    NIBLACK=6
+    #NIBLACK=6
     FLOYD_STEINBERG=7
     COLOR_PAPER_QUANTIZATION=8
     COLOR_TEXT_QUANTIZATION=9
@@ -42,15 +42,15 @@ class Algorithm(Enum):
         texts = {
             Algorithm.NONE: "Modus beibehalten",
             Algorithm.GRAY: "Graustufen",
-            Algorithm.GRAY_WHITE: "Grau auf Weiß",
-            Algorithm.OTSU: "SW Otsu (Text gleichmäßig)",
-            Algorithm.NIBLACK: "SW NIBLACK (Text fleckig)",
-            Algorithm.SAUVOLA: "SW Sauvola (Text fleckig)",
-            Algorithm.FLOYD_STEINBERG: "SW Floyd-Steinberg (Bilder)",
-            Algorithm.COLOR_PAPER_QUANTIZATION: "Farbiges Papier",
-            Algorithm.COLOR_TEXT_QUANTIZATION: "Farbige Schrift auf weißem Hintergrund",
-            Algorithm.TWO_COLOR_QUANTIZATION: "Schrift und Hintergrund farbig",
-            Algorithm.WEISS: "Komplett weiss"
+            Algorithm.GRAY_WHITE: "Grauer Text auf weißem Papier",
+            Algorithm.OTSU: "Normal schwarzer Text auf weißem Papier",
+            #Algorithm.NIBLACK: "SW NIBLACK (Text fleckig)",
+            Algorithm.SAUVOLA: "Krisseliger Text auf weißem Papier",
+            Algorithm.FLOYD_STEINBERG: "Photo",
+            Algorithm.COLOR_PAPER_QUANTIZATION: "Text auf farbigem Papier",
+            Algorithm.COLOR_TEXT_QUANTIZATION: "Farbiger Text auf weißem Papier",
+            Algorithm.TWO_COLOR_QUANTIZATION: "Farbiger Text auf farbigem Papier",
+            Algorithm.WEISS: "Ausradieren"
         }
     
         return texts[self]
@@ -296,7 +296,7 @@ class AlgorithmModule(Module):
                 Algorithm.FLOYD_STEINBERG: FloydSteinberg(),
                 Algorithm.OTSU: Otsu(),
                 Algorithm.SAUVOLA: Sauvola(),
-                Algorithm.NIBLACK: Niblack(),
+                #Algorithm.NIBLACK: Niblack(),
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),

@@ -204,26 +204,42 @@ class FinishingService(object):
     
     def create_finale_image(self, page: Page, target_resolution: int) -> Image:
         
-        img = final_img = page.get_base_image(target_resolution)
+        img = final_img = page.get_raw_image()
+
+        target_source_ratio = 1.0        
+        if page.source_resolution != target_resolution:
+            target_source_ratio = target_resolution / page.source_resolution
+            img = self._change_resolution(img, target_source_ratio)
         
         if page.main_region.mode_algorithm != Algorithm.NONE:
             final_img = self._apply_algorithm(img, page.main_region.mode_algorithm)
             
-        return self._apply_regions(page.sub_regions, final_img, img, target_resolution)
+        return self._apply_regions(page.sub_regions, final_img, img, target_source_ratio)
+
+    def _change_resolution(self, img: Image, target_source_ratio: float) -> Image:
+
+        current_width, current_height = img.size
+        new_width = int(current_width * target_source_ratio)
+        new_height = int(current_height * target_source_ratio)
+
+        return img.resize((new_width, new_height))
         
-    def _apply_regions(self, regions: [],final_img: Image, img: Image, target_resolution: int) -> Image:
+    def _apply_regions(self, regions: [],final_img: Image, img: Image, target_source_ratio: float) -> Image:
         
         if len(regions) == 0:
             return final_img
         
         for region in regions:
-            final_img = self._apply_region(region, final_img, img, target_resolution)
+            final_img = self._apply_region(region, final_img, img, target_source_ratio)
     
         return final_img
     
-    def _apply_region(self, region: Region, final_img: Image, img: Image, target_resolution) -> Image:
+    def _apply_region(self, region: Region, final_img: Image, img: Image, target_source_ratio) -> Image:
         
-        region_img = img.crop((region.x, region.y, region.x2, region.y2))
+        region_img = img.crop((round(region.x * target_source_ratio),
+                               round(region.y * target_source_ratio),
+                               round(region.x2 * target_source_ratio),
+                               round(region.y2 * target_source_ratio)))
         region_img = self._apply_algorithm(region_img, region.mode_algorithm)
         if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
             final_img = final_img.convert("RGBA")
@@ -231,7 +247,10 @@ class FinishingService(object):
             final_img = final_img.convert("RGB")
         if region_img.mode == "L" and final_img.mode == "1":
             final_img = final_img.convert("L")
-        final_img.paste(region_img, (region.x, region.y, region.x2, region.y2))
+        final_img.paste(region_img, (round(region.x * target_source_ratio),
+                                     round(region.y * target_source_ratio),
+                                     round(region.x2 * target_source_ratio),
+                                     round(region.y2 * target_source_ratio)))
         return final_img
 
     def _apply_algorithm(self, img: Image, algorithm: Algorithm):
