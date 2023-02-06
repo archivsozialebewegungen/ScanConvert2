@@ -16,14 +16,7 @@ class Mode(Enum):
     GRAY=2
     COLOR=3
 
-class SortType(Enum):
-    
-    STRAIGHT=1
-    SINGLE_ALL_FRONT_ALL_BACK=2
-    SHEET=3
-    SHEET_ALL_FRONT_ALL_BACK=4
-
-class Scantype(Enum):
+class ScantypeObsolete(Enum):
     
     SINGLE=1
     DOUBLE=2
@@ -32,13 +25,6 @@ class Scantype(Enum):
     SHEET_90=5
     SHEET_270=6
     
-class Scannertype(Enum):
-    
-    OVERHEAD=1
-    FLATBED=2
-    FEEDER_SIMPLEX=3
-    FEEDER_DUPLEX=4
-
 class MissingResolutionInfo(Exception):
     
     pass
@@ -62,7 +48,7 @@ class UpscalingError(Exception):
 def get_image_resolution(img: Image) -> int:
         
     if not 'dpi' in img.info:
-        return 300
+        raise MissingResolutionInfo
         
     xres, yres = img.info['dpi']
     if xres == 1 or yres == 1:
@@ -74,13 +60,23 @@ def get_image_resolution(img: Image) -> int:
     # newer versions of Pillow return a float
     return round(xres)
 
+class ProjectProperties(object):
+    
+    def __init__(self):
+        
+        self.pdf_resolution = 300
+        self.tif_resolution = 300
+        self.run_ocr = True
+        self.create_pdfa = True
+        self.ocr_lang = "deu"
+
 class Region(object):
     '''
     A simple data class to describe a part of a scan
     and the necessary mode transformation algorithm
     '''
 
-    def __init__(self, x: int, y: int, width: int, height: int, mode_algorithm: Algorithm=Algorithm.OTSU):
+    def __init__(self, x: float, y: float, width: float, height: float, mode_algorithm: Algorithm=Algorithm.OTSU):
 
         self.x = x
         self.y = y
@@ -112,10 +108,12 @@ class Scan(object):
         with Image.open(filename) as img:
             self.width = img.width
             self.height = img.height
-            self.resolution = get_image_resolution(img)
+            try:
+                self.resolution = get_image_resolution(img)
+            except:
+                self.resolution = None
             self.mode = self._get_mode(img)
-        
-    
+
     def _get_mode(self, img) -> Mode:
         
         # Some containers like png do not have a
@@ -144,11 +142,11 @@ class Page:
     '''
     This class describes a single page of a project. In
     principle it consists of a set of rules
-    to extract an Image from a Scan. The rules may contain
-    change of resolution, the region of the scan we are
-    interested in and which mode changing algorithm we want
-    to apply to this region, the target resolution we desire
-    and, optionally, a rotation angle.
+    to extract an Image from a Scan: Mainly
+    cutting a region from the scan and rotating it.
+    It also contains the algorithm to apply to the
+    scan, the default being the Otsu algorithm for
+    binarization.
     
     Additionally it should be possible to define certain
     special region, on which we want to apply different
@@ -203,35 +201,23 @@ class Page:
             self.current_sub_region_no = self.no_of_sub_regions
         else:
             self.current_sub_region_no -= 1
-
-    def get_base_image(self, target_resolution=300) -> Image:
-        
-        if target_resolution > self.scan.resolution:
-            pass
-            #raise UpscalingError()
+            
+    def get_raw_image(self):
+        """
+        The only operation performed on the scan is cutting
+        the page region from the scan and rotating it appropriately
+        """
         
         img = Image.open(self.scan.filename)
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
-        if target_resolution != self.scan.resolution:
-            img = self._change_resolution(img, self.scan.resolution, target_resolution)
         if self.final_rotation_angle != 0:
             img = self._rotate_image(img, self.final_rotation_angle)
+        img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
         return img
             
     def add_region(self, region: Region):
         
         self.sub_regions.append(region)
-    
-    def _change_resolution(self, img: Image, source_resolution: int, target_resolution: int) -> Image:
-
-        current_width, current_height = img.size
-        new_width = int(current_width * target_resolution / source_resolution)
-        new_height = int(current_height * target_resolution / source_resolution)
-
-        scaled_img = img.resize((new_width, new_height))
-        scaled_img.info['dpi'] = (target_resolution, target_resolution)
-  
-        return scaled_img
     
     def _rotate_image(self, img: Image, angle: int) -> Image:
         '''
@@ -249,7 +235,7 @@ class Page:
 
     def _apply_algorithm(self, img: Image, algorithm: int) -> Image:
 
-        return Page.algorithms.apply_algorithm(img, algorithm)        
+        return Page.algorithms._apply_algorithm(img, algorithm)        
     
     def _get_final_rotation_angle(self):
         
@@ -274,7 +260,8 @@ class Page:
     final_rotation_angle = property(_get_final_rotation_angle)
     current_sub_region = property(_get_current_region)
     no_of_sub_regions = property(_get_number_of_sub_regions)
-
+    source_resolution = property(lambda self: self.scan.resolution)
+    
 class MetaData(object):
     
     def __init__(self):
@@ -296,6 +283,7 @@ class Project(object):
         self.pages = pages
         self.metadata = MetaData()
         self.current_page_no = None
+        self.project_properties = ProjectProperties()
     
     def first_page(self):
         

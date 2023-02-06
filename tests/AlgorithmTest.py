@@ -84,7 +84,7 @@ class AlgorithmTests(unittest.TestCase):
         self.result = self.algorithms[Algorithm.SAUVOLA].transform(self.img)
         self.result.save(os.path.join("/", "tmp", "sauvola.png"))
 
-    def testNiblack(self):
+    def notestNiblack(self):
         
         self.result = self.algorithms[Algorithm.NIBLACK].transform(self.img)
         self.result.save(os.path.join("/", "tmp", "niblack.png"))

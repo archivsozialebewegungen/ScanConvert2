@@ -6,7 +6,16 @@ Created on 04.11.2022
 from injector import inject, singleton
 
 from Asb.ScanConvert2.ScanConvertDomain import Page, Region, \
-    Scan, SortType, Project
+    Scan, Project
+from enum import Enum
+    
+class SortType(Enum):
+    
+    STRAIGHT=1
+    STRAIGHT_WITH_TITLE=2
+    SINGLE_ALL_FRONT_ALL_BACK=3
+    SHEET=4
+    SHEET_ALL_FRONT_ALL_BACK=5
 
 class NumberOfPagesDetector:
     
@@ -189,11 +198,10 @@ class PageSorter():
     def sort_pages(self, pages: [], sort_type: SortType):
         
         if sort_type == SortType.STRAIGHT:
-            if pages[0].scan.no_of_pages == 2:
-                # First page must be placed at the end
-                return pages[1:] + [pages[0]]
-            else:
-                return pages
+            return pages
+        
+        if sort_type == SortType.STRAIGHT_WITH_TITLE:
+            return pages[1:] + [pages[0]]
         
         if sort_type == SortType.SINGLE_ALL_FRONT_ALL_BACK:
             if len(pages) % 2 != 0:

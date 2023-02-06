@@ -4,23 +4,24 @@ Created on 02.11.2022
 @author: michael
 '''
 import io
+import os
+import pickle
+import shutil
+import tempfile
+from zipfile import ZipFile
 
 from PIL import Image
+from PIL.TiffImagePlugin import ImageFileDirectory_v2
 from injector import singleton, inject
+import ocrmypdf
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
-from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
-from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator
-from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    SortType, Page, Region
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm
-import tempfile
-import os
-from zipfile import ZipFile
-from PIL.TiffImagePlugin import ImageFileDirectory_v2
-import pickle
+from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
+from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
+from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
 
 
 INVISIBLE = 3
@@ -37,9 +38,9 @@ class OCRService(object):
         
         self.ocr_runner = ocr_runner
     
-    def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas) -> Canvas:
+    def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas, lang: str) -> Canvas:
         
-        page = self.ocr_runner.run_tesseract(img)
+        page = self.ocr_runner.run_tesseract(img, lang)
         
         for line in page.lines:
             pdf = self._write_line(line, pdf, page)
@@ -137,7 +138,7 @@ class TiffService(object):
     image_description = 270
         
     
-    def create_tiff_file_archive(self, project: Project, filebase, resolution: int = 300):
+    def create_tiff_file_archive(self, project: Project, filebase):
         
         zipfile = ZipFile(self._get_file_name(filebase), mode='w')
         
@@ -145,8 +146,8 @@ class TiffService(object):
         meta_data[self.artist_tag] = self.utf8_to_ascii(project.metadata.author)
         meta_data[self.document_name_tag] = self.utf8_to_ascii(project.metadata.title)
         meta_data[self.image_description] = self.utf8_to_ascii("%s\n\nSchlagworte: %s" % (project.metadata.subject, project.metadata.keywords))
-        meta_data[self.x_resolution] = resolution
-        meta_data[self.y_resolution] = resolution
+        meta_data[self.x_resolution] = project.project_properties.tif_resolution
+        meta_data[self.y_resolution] = project.project_properties.tif_resolution
         meta_data[self.resolution_unit] = self.inch_resolution_unit
         
         with tempfile.TemporaryDirectory() as tempdir:
@@ -159,7 +160,7 @@ class TiffService(object):
                 meta_data[self.page_name_tag] = "Seite %d von %d des Dokuments" % (counter, no_of_pages)
                 page_name = "Seite%04d.tif" % counter
                 file_name = os.path.join(tempdir, page_name)
-                img = page.get_base_image(resolution)
+                img = page.get_base_image(project.project_properties.tif_resolution)
                 img.save(file_name, tiffinfo=meta_data, compression="tiff_lzw")
                 zipfile.write(file_name, page_name)
             
@@ -200,39 +201,58 @@ class FinishingService(object):
         
         self.algorithm_implementations = algorithm_implementations
     
-    def create_finale_image(self, page: Page, target_resolution: int = 300) -> Image:
+    def create_finale_image(self, page: Page, target_resolution: int) -> Image:
         
-        img = final_img = page.get_base_image(target_resolution)
+        img = final_img = page.get_raw_image()
+
+        target_source_ratio = 1.0        
+        if page.source_resolution != target_resolution:
+            target_source_ratio = target_resolution / page.source_resolution
+            img = self._change_resolution(img, target_source_ratio)
         
         if page.main_region.mode_algorithm != Algorithm.NONE:
-            final_img = self.apply_algorithm(img, page.main_region.mode_algorithm)
+            final_img = self._apply_algorithm(img, page.main_region.mode_algorithm)
             
-        return self.apply_regions(page.sub_regions, final_img, img, target_resolution)
+        return self._apply_regions(page.sub_regions, final_img, img, target_source_ratio)
+
+    def _change_resolution(self, img: Image, target_source_ratio: float) -> Image:
+
+        current_width, current_height = img.size
+        new_width = int(current_width * target_source_ratio)
+        new_height = int(current_height * target_source_ratio)
+
+        return img.resize((new_width, new_height))
         
-    def apply_regions(self, regions: [],final_img: Image, img: Image, target_resolution) -> Image:
+    def _apply_regions(self, regions: [],final_img: Image, img: Image, target_source_ratio: float) -> Image:
         
         if len(regions) == 0:
             return final_img
         
         for region in regions:
-            final_img = self.apply_region(region, final_img, img, target_resolution)
+            final_img = self._apply_region(region, final_img, img, target_source_ratio)
     
         return final_img
     
-    def apply_region(self, region: Region, final_img: Image, img: Image, target_resolution) -> Image:
+    def _apply_region(self, region: Region, final_img: Image, img: Image, target_source_ratio) -> Image:
         
-        region_img = img.crop((region.x, region.y, region.x2, region.y2))
-        region_img = self.apply_algorithm(region_img, region.mode_algorithm)
+        region_img = img.crop((round(region.x * target_source_ratio),
+                               round(region.y * target_source_ratio),
+                               round(region.x2 * target_source_ratio),
+                               round(region.y2 * target_source_ratio)))
+        region_img = self._apply_algorithm(region_img, region.mode_algorithm)
         if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
             final_img = final_img.convert("RGBA")
         if region_img.mode == "RGB" and (final_img.mode == "L" or final_img.mode == "1"):
             final_img = final_img.convert("RGB")
         if region_img.mode == "L" and final_img.mode == "1":
             final_img = final_img.convert("L")
-        final_img.paste(region_img, (region.x, region.y, region.x2, region.y2))
+        final_img.paste(region_img, (round(region.x * target_source_ratio),
+                                     round(region.y * target_source_ratio),
+                                     round(region.x2 * target_source_ratio),
+                                     round(region.y2 * target_source_ratio)))
         return final_img
 
-    def apply_algorithm(self, img: Image, algorithm: Algorithm):
+    def _apply_algorithm(self, img: Image, algorithm: Algorithm):
         
         return self.algorithm_implementations[algorithm].transform(img)
 
@@ -244,42 +264,48 @@ class PdfService:
 
         self.ocr_service = ocr_service
         self.finishing_service = finishing_service
-        self.run_ocr = True
     
-    def create_pdf_file(self, project: Project, filebase: str, resolution: int = 300):
-        
+    def create_pdf_file(self, project: Project, filebase: str):
    
-   
-        pdf = Canvas(self._get_file_name(filebase), pageCompression=1)
-        pdf.setAuthor(project.metadata.author)
-        pdf.setCreator('Scan-Convert 2')
-        pdf.setTitle(project.metadata.title)
-        pdf.setKeywords(project.metadata.keywords)
-        pdf.setSubject(project.metadata.subject)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = os.path.join(temp_dir, "output.pdf")
+            pdf = Canvas(temp_file, pageCompression=1)
+            pdf.setAuthor(project.metadata.author)
+            pdf.setCreator('Scan-Convert 2')
+            pdf.setTitle(project.metadata.title)
+            pdf.setKeywords(project.metadata.keywords)
+            pdf.setSubject(project.metadata.subject)
         
-        page_counter = 0
-        for page in project.pages:
-            page_counter += 1
-            if page.skip_page:
-                continue
-            image = self.finishing_service.create_finale_image(page)
-            width_in_dots, height_in_dots = image.size
+            page_counter = 0
+            for page in project.pages:
+                page_counter += 1
+                if page.skip_page:
+                    continue
+                image = self.finishing_service.create_finale_image(page, project.project_properties.pdf_resolution)
+                width_in_dots, height_in_dots = image.size
             
-            page_width = width_in_dots * 72 / resolution
-            page_height = height_in_dots * 72 / resolution
+                page_width = width_in_dots * 72 / project.project_properties.pdf_resolution
+                page_height = height_in_dots * 72 / project.project_properties.pdf_resolution
             
-            pdf.setPageSize((width_in_dots * inch / resolution, height_in_dots * inch / resolution))
+                pdf.setPageSize((width_in_dots * inch / project.project_properties.pdf_resolution,
+                                 height_in_dots * inch / project.project_properties.pdf_resolution))
 
-            img_stream = io.BytesIO()
-            image.save(img_stream, format='png')
-            img_stream.seek(0)
-            img_reader = ImageReader(img_stream)
-            pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
-            if self.run_ocr:
-                pdf = self.ocr_service.add_ocrresult_to_pdf(image, pdf)
-            pdf.showPage()
+                img_stream = io.BytesIO()
+                image.save(img_stream, format='png')
+                img_stream.seek(0)
+                img_reader = ImageReader(img_stream)
+                pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
+                if project.project_properties.run_ocr:
+                    pdf = self.ocr_service.add_ocrresult_to_pdf(image, pdf, project.project_properties.ocr_lang)
+                pdf.showPage()
         
-        pdf.save()
+            pdf.save()
+            # Convert to pdfa and optimize graphics
+            if project.project_properties.create_pdfa:
+                #ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
+                ocrmypdf.ocr(temp_file, self._get_file_name(filebase), skip_text=True)
+            else:
+                shutil.copy(temp_file, self._get_file_name(filebase))
         
     def _get_file_name(self, filebase: str):
         

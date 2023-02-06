@@ -4,7 +4,6 @@ Created on 06.11.2022
 @author: michael
 '''
 import os
-import pickle
 import shutil
 import sys
 import tempfile
@@ -27,156 +26,17 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
-from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, TaskType, JobDefinition
-from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog
+from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
+from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
-
+from networkx.algorithms.bipartite.projection import project
+from Asb.ScanConvert2.GUI.PageView import PageView
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
 
-class PageView(QGraphicsView):
-    
-    def __init__(self):
-        
-        super().__init__()
-        self.img = None
-        self.rubberBand = QRubberBand(QRubberBand.Shape.Rectangle, self)
-        self.reset_rubberband()
-        self.selection_cache = (0,0,0,0)
-        self.region_select = False
-
-    def set_page(self, img: Image):
-
-        self.img = img
-        pixmap = QPixmap(ImageQt(self.img))
-        self.scene = QGraphicsScene()
-        self.scene.addPixmap(pixmap)
-        self.invalidateScene()
-        self.setScene(self.scene)
-        self.fitInView(self.image_rectangle, Qt.AspectRatioMode.KeepAspectRatio)
-        self.reset_rubberband()
-
-    def mousePressEvent(self, event):
-
-        if not self.region_select:
-            return
-                
-        self.origin = event.pos()
-        self.rubberBand.setGeometry(QRect(self.origin, QSize()).normalized())
-        self.rubberBand.show()
-
-    def mouseMoveEvent(self, event):
-
-        if not self.region_select:
-            return
-
-        self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
-
-    def mouseReleaseEvent(self, event):
-        
-        if not self.region_select:
-            return
-
-        self.cache_img_selection()
-        
-    def resizeEvent(self, *args, **kwargs):
-        super().resizeEvent(*args, **kwargs)
-        if self.img is not None:
-            self.fitInView(self.image_rectangle, Qt.AspectRatioMode.KeepAspectRatio)
-        self.restore_img_selection()
-
-    def show_region(self, region: Region):
-
-        self.selection_cache = (region.x, region.y, region.x2, region.y2)
-        self.restore_img_selection()
-        return
-        
-    def restore_img_selection(self):
-        
-        if self.selection_cache == (0,0,0,0):
-            return
-        
-        (scale, x_offset, y_offset) = self._get_scale_and_offsets()
-                
-        rubberband_x1 = int((self.selection_cache[0] * scale) + x_offset)
-        rubberband_y1 = int((self.selection_cache[1] * scale) + y_offset)
-        rubberband_width = int(((self.selection_cache[2] - self.selection_cache[0]) * scale))
-        rubberband_height = int(((self.selection_cache[3] - self.selection_cache[1]) * scale))
-        
-        self.origin = QPoint(rubberband_x1, rubberband_y1)
-        self.rubberBand.hide()
-        self.rubberBand.setGeometry(QRect(QPoint(rubberband_x1, rubberband_y1), QSize(rubberband_width, rubberband_height)).normalized())
-        self.rubberBand.show()
-
-    def reset_rubberband(self):
-        
-        self.selection_cache = (0,0,0,0)
-        self.rubberBand.setGeometry(QRect(0,0,0,0).normalized())
-        self.rubberBand.hide()
-        
-    def cache_img_selection(self):
-        
-        (scale, x_offset, y_offset) = self._get_scale_and_offsets()
-        
-        (sel_x1,  sel_y1, sel_x2, sel_y2) = self.rubberBand.geometry().getCoords()
-        page_x1 = (sel_x1 - x_offset) / scale
-        page_x2 = (sel_x2 - x_offset) / scale
-        page_y1 = (sel_y1 - y_offset) / scale
-        page_y2 = (sel_y2 - y_offset) / scale
-
-        if page_x1 < 0:
-            page_x1 = 0
-        if page_x2 > self.img.width:
-            page_x2 = self.img.width
-        if page_y1 < 0:
-            page_y1 = 0
-        if page_y2 > self.img.height:
-            page_y2 = self.img.height
-        
-        if page_x1 > self.img.width or \
-            page_y1 > self.img.height or \
-            page_x2 < 0 or \
-            page_y2 < 0:
-            
-            self.selection_cache = (0,0,0,0)
-
-        self.selection_cache = (page_x1, page_y1, page_x2, page_y2)
-
-    def _get_scale_and_offsets(self):
-
-        graphics_view_geometry = self.geometry()
-        
-        scale_x = graphics_view_geometry.width() / self.img.width
-        scale_y = graphics_view_geometry.height() / self.img.height
-
-        scale = scale_x
-        if scale_x > scale_y:
-            scale = scale_y
-
-        scaled_img_width = self.img.width * scale
-        scaled_img_height = self.img.height * scale
-        
-        x_offset = int((self.geometry().width() - scaled_img_width) / 2)
-        y_offset = int((self.geometry().height() - scaled_img_height) / 2)
-        
-        assert(x_offset == 0 or y_offset == 0)
-        
-        return (scale, x_offset, y_offset)
-
-    def get_selected_region(self):
-        
-        x1 = int(self.selection_cache[0])
-        y1 = int(self.selection_cache[1])
-        x2 = int(self.selection_cache[2])
-        y2 = int(self.selection_cache[3])
-        width = x2 - x1
-        height = y2 - y1
-        return Region(x1, y1, width, height)
-                
-    image_rectangle = property(lambda self: QRectF(0, 0, self.img.width, self.img.height))
 
 @singleton
 class FehPreviewer(object):
@@ -187,9 +47,9 @@ class FehPreviewer(object):
         self.feh = shutil.which("feh")
         self.finishing_service = finishing_service
         
-    def show(self, page: Page):
+    def show(self, page: Page, resolution: int):
         
-        img = self.finishing_service.create_finale_image(page)
+        img = self.finishing_service.create_finale_image(page, resolution)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))
@@ -211,7 +71,7 @@ class PhotoDetectionThread(QThread):
     def run(self):
         
         current_page = self.project.current_page
-        photo_bboxes = self.photo_detector.find_pictures(current_page.get_base_image())
+        photo_bboxes = self.photo_detector.find_pictures(current_page.get_raw_image(self.project.project_properties.pdf_resolution))
         if len(photo_bboxes) == 0:
             return
         
@@ -241,6 +101,7 @@ class Window(QMainWindow):
         self.previewer = previewer
         self.photo_detector = photo_detector
         self.metadata_dialog = MetadataDialog(self)
+        self.properties_dialog = PropertiesDialog(self)
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -440,7 +301,7 @@ class Window(QMainWindow):
         new_project_action = QAction(QIcon('start.png'), '&Neues Projekt', self)
         new_project_action.setShortcut('Ctrl+N')
         new_project_action.setStatusTip('Neues Projekt')
-        new_project_action.triggered.connect(self._start_new_project)
+        new_project_action.triggered.connect(self.cb_new_project)
 
         exit_action = QAction(QIcon('exit.png'), '&Beenden', self)
         exit_action.setShortcut('Ctrl+Q')
@@ -470,7 +331,12 @@ class Window(QMainWindow):
         edit_metadata_action = QAction(QIcon('file.png'), '&Metadaten', self)
         edit_metadata_action.setShortcut('Ctrl+M')
         edit_metadata_action.setStatusTip('Metadaten bearbeiten')
-        edit_metadata_action.triggered.connect(self._edit_metadata)
+        edit_metadata_action.triggered.connect(self.cb_edit_metadata)
+
+        edit_properties_action = QAction(QIcon('file.png'), '&Einstellungen', self)
+        edit_properties_action.setShortcut('Ctrl+E')
+        edit_properties_action.setStatusTip('Projekteinstellungen bearbeiten')
+        edit_properties_action.triggered.connect(self.cb_edit_properties)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
@@ -482,17 +348,27 @@ class Window(QMainWindow):
         exportMenu.addAction(pdf_export_action)
         exportMenu.addAction(tif_export_action)
         exportMenu.addAction(edit_metadata_action)
+        exportMenu.addAction(edit_properties_action)
     
-    def _edit_metadata(self):
+    def cb_edit_metadata(self):
         
         self.metadata_dialog.metadata = self.project.metadata
         if self.metadata_dialog.exec():
             self.project.metadata = self.metadata_dialog.metadata
     
+    def cb_edit_properties(self):
+        
+        if self.project is None:
+            return
+        
+        self.properties_dialog.project_properties = self.project.project_properties
+        if self.properties_dialog.exec():
+            self.project.project_properties = self.properties_dialog.project_properties
+
     def _preview_current_page(self):
         
         try:
-            self.previewer.show(self.project.current_page)
+            self.previewer.show(self.project.current_page, self.project.project_properties.pdf_resolution)
         except NoPagesInProjectException:
             pass
         
@@ -629,7 +505,7 @@ class Window(QMainWindow):
         else:
             self.new_region_button.setText(CREATE_REGION)
             self.delete_region_button.setText(DELETE_REGION)
-            self.apply_region()
+            self._apply_region()
 
             
     def create_region(self):
@@ -640,7 +516,7 @@ class Window(QMainWindow):
         self.graphics_view.reset_rubberband()
     
     
-    def apply_region(self):
+    def _apply_region(self):
         """
         Selection is finished and we add the selected region to the
         sub regions of the page
@@ -680,7 +556,7 @@ class Window(QMainWindow):
 
     def run_photo_detection(self, page: Page):
 
-        photo_bboxes = self.photo_detector.find_pictures(page.get_base_image())
+        photo_bboxes = self.photo_detector.find_pictures(page.get_raw_image())
         if len(photo_bboxes) == 0:
             return
         
@@ -734,7 +610,7 @@ class Window(QMainWindow):
         self.skip_page_checkbox.setChecked(self.current_page.skip_page)
         if self.current_page.additional_rotation_angle != self._get_rotation():
             self._set_rotation(self.current_page.additional_rotation_angle)
-        self.graphics_view.set_page(self.current_page.get_base_image())
+        self.graphics_view.set_page(self.current_page.get_raw_image())
 
         self.main_algo_select.setEnabled(True)
         for idx in range(0, self.main_algo_select.count()):
@@ -748,7 +624,7 @@ class Window(QMainWindow):
             pass
         self.show_region()
 
-    def _start_new_project(self):
+    def cb_new_project(self):
         
         wizard = ProjectWizard()
         if wizard.exec():
