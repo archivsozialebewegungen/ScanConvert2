@@ -67,6 +67,7 @@ class MetadataDialog(QDialog):
         metadata.author = self.author_input.text()
         metadata.keywords = self.keywords_input.text()
         metadata.subject = self.description_input.toPlainText()
+        metadata.reviewed = True
         return metadata
         
     def _set_metadata(self, metadata: MetaData):

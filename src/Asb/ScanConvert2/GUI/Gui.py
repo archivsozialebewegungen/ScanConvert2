@@ -49,7 +49,7 @@ class FehPreviewer(object):
         
     def show(self, page: Page, resolution: int):
         
-        img = self.finishing_service.create_finale_image(page, resolution)
+        img = self.finishing_service.create_final_image(page, resolution)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))
@@ -145,7 +145,7 @@ class Window(QMainWindow):
         left_panel.addWidget(self.skip_page_checkbox)
         if self.previewer.is_working():
             preview_button = QPushButton("Vorschau")
-            preview_button.clicked.connect(self._preview_current_page)
+            preview_button.clicked.connect(self.cb_preview_current_page)
             left_panel.addWidget(preview_button)
             
         label = QLabel("<b>Regioneneinstellungen</b>")
@@ -332,7 +332,6 @@ class Window(QMainWindow):
         edit_metadata_action.setShortcut('Ctrl+M')
         edit_metadata_action.setStatusTip('Metadaten bearbeiten')
         edit_metadata_action.triggered.connect(self.cb_edit_metadata)
-
         edit_properties_action = QAction(QIcon('file.png'), '&Einstellungen', self)
         edit_properties_action.setShortcut('Ctrl+E')
         edit_properties_action.setStatusTip('Projekteinstellungen bearbeiten')
@@ -365,7 +364,7 @@ class Window(QMainWindow):
         if self.properties_dialog.exec():
             self.project.project_properties = self.properties_dialog.project_properties
 
-    def _preview_current_page(self):
+    def cb_preview_current_page(self):
         
         try:
             self.previewer.show(self.project.current_page, self.project.project_properties.pdf_resolution)
@@ -396,7 +395,11 @@ class Window(QMainWindow):
         
     def cb_export_pdf(self):
         
+        if not self.project.metadata.reviewed:
+            self.cb_edit_metadata()
+        
         file_name = QFileDialog.getSaveFileName(parent=self,
+                                                dir=self.project.proposed_pdf_file,
                                                 caption="Pdf-Datei für das Speichern angeben",
                                                 filter="Pdf-Dateien (*.pdf)")
 
@@ -409,7 +412,13 @@ class Window(QMainWindow):
             
     def cb_export_tif(self):
         
+        if not self.project.metadata.reviewed:
+            self.cb_edit_metadata()
+        
+
+        
         file_name = QFileDialog.getSaveFileName(parent=self,
+                                                dir=self.project.proposed_zip_file,
                                                 caption="Zip-Datei für das Speichern angeben",
                                                 filter="Zip-Dateien (*.zip)")
 

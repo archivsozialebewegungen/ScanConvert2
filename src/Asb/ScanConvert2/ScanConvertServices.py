@@ -116,92 +116,23 @@ class OCRService(object):
         return (text_origin_x, text_origin_y)
         
 @singleton
-class TiffService(object):
-
-    replacements = {'Ä': 'Ae',
-                    'Ö': 'Oe',
-                    'Ü': 'Ue',
-                    'ß': 'ss',
-                    'ä': 'ae',
-                    'ö': 'oe',
-                    'ü': 'ue'
-                    }
-    
-        
-    document_name_tag = 269
-    page_name_tag = 285
-    artist_tag = 315
-    x_resolution = 282
-    y_resolution = 283
-    resolution_unit = 296
-    inch_resolution_unit = 2
-    image_description = 270
-        
-    
-    def create_tiff_file_archive(self, project: Project, filebase):
-        
-        zipfile = ZipFile(self._get_file_name(filebase), mode='w')
-        
-        meta_data = ImageFileDirectory_v2()
-        meta_data[self.artist_tag] = self.utf8_to_ascii(project.metadata.author)
-        meta_data[self.document_name_tag] = self.utf8_to_ascii(project.metadata.title)
-        meta_data[self.image_description] = self.utf8_to_ascii("%s\n\nSchlagworte: %s" % (project.metadata.subject, project.metadata.keywords))
-        meta_data[self.x_resolution] = project.project_properties.tif_resolution
-        meta_data[self.y_resolution] = project.project_properties.tif_resolution
-        meta_data[self.resolution_unit] = self.inch_resolution_unit
-        
-        with tempfile.TemporaryDirectory() as tempdir:
-
-            no_of_pages = len(project.pages)
-            
-            counter = 0
-            for page in project.pages:
-                counter += 1
-                meta_data[self.page_name_tag] = "Seite %d von %d des Dokuments" % (counter, no_of_pages)
-                page_name = "Seite%04d.tif" % counter
-                file_name = os.path.join(tempdir, page_name)
-                img = page.get_base_image(project.project_properties.tif_resolution)
-                img.save(file_name, tiffinfo=meta_data, compression="tiff_lzw")
-                zipfile.write(file_name, page_name)
-            
-            readme_file = os.path.join(tempdir, "readme.txt")
-            with open(readme_file, 'w') as readme:
-                readme.write("Information zu diesem ZIP Archiv\n================================\n")
-                readme.write("Titel: %s\n" % project.metadata.title)
-                readme.write("Anzahl der Seiten/Dateien: %d\n" % no_of_pages)
-                readme.write("Autor:in: %s\n\n" % project.metadata.author)
-                readme.write("Sonstige Informationen:\n%s\n\n" % project.metadata.subject)
-                readme.write("Schlagworte: %s\n\n" % project.metadata.keywords)
-                readme.write("Dieses ZIP-Archiv enthält Digitalisatsdateien, die mit dem\n")
-                readme.write("Scan Konvertierungsprogramm des Archivs Soziale Bewegungen e.V.\n")
-                readme.write("Freiburg erstellt und zusammengepackt wurden.\n")
-                readme.write("Das Programm kann hier heruntergeladen werden:\n")
-                readme.write("https://github.com/archivsozialebewegungen/ScanConvert2\n")
-            zipfile.write(readme_file, "readme.txt")
-                
-            zipfile.close()
-
-    def _get_file_name(self, filebase: str):
-        
-        if filebase[-4:] == ".zip":
-            return filebase
-        return filebase + ".zip"
-    
-    def utf8_to_ascii(self, string: str):
-        
-        for utf8, ascii_string in self.replacements.items():
-            string = string.replace(utf8, ascii_string)
-        return string
-
-@singleton
 class FinishingService(object):
     
     @inject
     def __init__(self, algorithm_implementations: AlgorithmImplementations):
         
         self.algorithm_implementations = algorithm_implementations
+
+    def create_scaled_image(self, page: Page, target_resolution: int) -> Image:
+
+        img = page.get_raw_image()
+
+        if page.source_resolution != target_resolution:
+            img = self._change_resolution(img, target_resolution / page.source_resolution)
     
-    def create_finale_image(self, page: Page, target_resolution: int) -> Image:
+        return img
+    
+    def create_final_image(self, page: Page, target_resolution: int) -> Image:
         
         img = final_img = page.get_raw_image()
 
@@ -257,6 +188,88 @@ class FinishingService(object):
         return self.algorithm_implementations[algorithm].transform(img)
 
 @singleton
+class TiffService(object):
+
+    replacements = {'Ä': 'Ae',
+                    'Ö': 'Oe',
+                    'Ü': 'Ue',
+                    'ß': 'ss',
+                    'ä': 'ae',
+                    'ö': 'oe',
+                    'ü': 'ue'
+                    }
+    
+        
+    document_name_tag = 269
+    page_name_tag = 285
+    artist_tag = 315
+    x_resolution = 282
+    y_resolution = 283
+    resolution_unit = 296
+    inch_resolution_unit = 2
+    image_description = 270
+    
+    @inject
+    def __init__(self, finishing_service: FinishingService):
+    
+        self.finishing_service = finishing_service
+        
+    def create_tiff_file_archive(self, project: Project, filebase):
+        
+        zipfile = ZipFile(self._get_file_name(filebase), mode='w')
+        
+        meta_data = ImageFileDirectory_v2()
+        meta_data[self.artist_tag] = self.utf8_to_ascii(project.metadata.author)
+        meta_data[self.document_name_tag] = self.utf8_to_ascii(project.metadata.title)
+        meta_data[self.image_description] = self.utf8_to_ascii("%s\n\nSchlagworte: %s" % (project.metadata.subject, project.metadata.keywords))
+        meta_data[self.x_resolution] = project.project_properties.tif_resolution
+        meta_data[self.y_resolution] = project.project_properties.tif_resolution
+        meta_data[self.resolution_unit] = self.inch_resolution_unit
+        
+        with tempfile.TemporaryDirectory() as tempdir:
+
+            no_of_pages = len(project.pages)
+            
+            counter = 0
+            for page in project.pages:
+                counter += 1
+                meta_data[self.page_name_tag] = "Seite %d von %d des Dokuments" % (counter, no_of_pages)
+                page_name = "Seite%04d.tif" % counter
+                file_name = os.path.join(tempdir, page_name)
+                img = self.finishing_service.create_scaled_image(page, project.project_properties.tif_resolution)
+                img.save(file_name, tiffinfo=meta_data, compression="tiff_lzw")
+                zipfile.write(file_name, page_name)
+            
+            readme_file = os.path.join(tempdir, "readme.txt")
+            with open(readme_file, 'w') as readme:
+                readme.write("Information zu diesem ZIP Archiv\n================================\n")
+                readme.write("Titel: %s\n" % project.metadata.title)
+                readme.write("Anzahl der Seiten/Dateien: %d\n" % no_of_pages)
+                readme.write("Autor:in: %s\n\n" % project.metadata.author)
+                readme.write("Sonstige Informationen:\n%s\n\n" % project.metadata.subject)
+                readme.write("Schlagworte: %s\n\n" % project.metadata.keywords)
+                readme.write("Dieses ZIP-Archiv enthält Digitalisatsdateien, die mit dem\n")
+                readme.write("Scan Konvertierungsprogramm des Archivs Soziale Bewegungen e.V.\n")
+                readme.write("Freiburg erstellt und zusammengepackt wurden.\n")
+                readme.write("Das Programm kann hier heruntergeladen werden:\n")
+                readme.write("https://github.com/archivsozialebewegungen/ScanConvert2\n")
+            zipfile.write(readme_file, "readme.txt")
+                
+            zipfile.close()
+
+    def _get_file_name(self, filebase: str):
+        
+        if filebase[-4:] == ".zip":
+            return filebase
+        return filebase + ".zip"
+    
+    def utf8_to_ascii(self, string: str):
+        
+        for utf8, ascii_string in self.replacements.items():
+            string = string.replace(utf8, ascii_string)
+        return string
+
+@singleton
 class PdfService:
     
     @inject
@@ -281,7 +294,7 @@ class PdfService:
                 page_counter += 1
                 if page.skip_page:
                     continue
-                image = self.finishing_service.create_finale_image(page, project.project_properties.pdf_resolution)
+                image = self.finishing_service.create_final_image(page, project.project_properties.pdf_resolution)
                 width_in_dots, height_in_dots = image.size
             
                 page_width = width_in_dots * 72 / project.project_properties.pdf_resolution

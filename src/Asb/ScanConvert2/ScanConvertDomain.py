@@ -8,6 +8,8 @@ from enum import Enum
 from PIL import Image
 
 from Asb.ScanConvert2.Algorithms import Algorithm
+import os
+import re
 
 
 class Mode(Enum):
@@ -270,6 +272,7 @@ class MetaData(object):
         self.author = ""
         self.subject = ""
         self.keywords = ""
+        self.reviewed = False
 
 class NoPagesInProjectException(Exception):
     
@@ -329,5 +332,15 @@ class Project(object):
             raise NoPagesInProjectException()
         return len(self.pages)
     
+    def _get_proposed_file(self, suffix):
+        
+        if len(self.pages) == 0:
+            return "unknown.%s" % suffix
+        return re.sub("[-_]?\d*\.[^\.]+?$", ".%s" % suffix, self.pages[0].scan.filename)
+        
+        
+    
     current_page = property(_get_current_page)
     no_of_pages = property(_get_number_of_pages)
+    proposed_pdf_file = property(lambda self: self._get_proposed_file("pdf"))
+    proposed_zip_file = property(lambda self: self._get_proposed_file("zip"))
