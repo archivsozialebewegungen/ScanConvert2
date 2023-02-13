@@ -129,7 +129,7 @@ class Scan(object):
         # of this program.
         if img.mode == "1":
             return Mode.BW
-        if img.mode == "L":
+        if img.mode == "L" or img.mode == "LA":
             return Mode.GRAY
         if img.mode == "RGB" or img.mode == "RGBA":
             return Mode.COLOR
@@ -212,6 +212,10 @@ class Page:
         
         img = Image.open(self.scan.filename)
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
+        if img.mode == "RGBA":
+            img = img.convert("RGB")
+        if img.mode == "LA":
+            img = img.convert("L")
         if self.final_rotation_angle != 0:
             img = self._rotate_image(img, self.final_rotation_angle)
         img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
