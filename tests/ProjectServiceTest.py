@@ -11,9 +11,10 @@ from fitz.fitz import Document
 from injector import Injector
 
 from Asb.ScanConvert2.Algorithms import AlgorithmModule
-from Asb.ScanConvert2.ScanConvertDomain import Scan, SortType
+from Asb.ScanConvert2.ScanConvertDomain import Scan
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from Base import BaseTest
+from Asb.ScanConvert2.ProjectGenerator import SortType
 
 
 numbers_as_text = {
@@ -126,7 +127,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  0,
                                                  False)
 
@@ -142,7 +143,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  270,
                                                  False)
 
@@ -158,7 +159,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  180,
                                                  False)
 
@@ -174,7 +175,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  90,
                                                  False)
 
@@ -190,7 +191,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  0,
                                                  True)
 
@@ -206,7 +207,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  90,
                                                  True)
 
@@ -222,7 +223,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  0,
                                                  True)
 
@@ -238,7 +239,7 @@ class ProjectServiceTest(BaseTest):
         
         project = self.project_service.create_project(scans,
                                                  2,
-                                                 SortType.STRAIGHT,
+                                                 SortType.STRAIGHT_WITH_TITLE,
                                                  270,
                                                  True)
 

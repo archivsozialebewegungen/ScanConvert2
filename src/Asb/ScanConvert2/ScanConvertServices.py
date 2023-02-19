@@ -18,7 +18,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
-from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm
+from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm,\
+    AlgorithmHelper, TooManyColors
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
@@ -119,10 +120,12 @@ class OCRService(object):
 class FinishingService(object):
     
     @inject
-    def __init__(self, algorithm_implementations: AlgorithmImplementations):
+    def __init__(self, algorithm_implementations: AlgorithmImplementations,
+                 algorithm_helper: AlgorithmHelper):
         
         self.algorithm_implementations = algorithm_implementations
-
+        self.algorithm_helper = algorithm_helper
+        
     def create_scaled_image(self, page: Page, target_resolution: int) -> Image:
 
         img = page.get_raw_image()
@@ -132,7 +135,7 @@ class FinishingService(object):
     
         return img
     
-    def create_final_image(self, page: Page, target_resolution: int) -> Image:
+    def create_final_image(self, page: Page, bg_colors: [], target_resolution: int) -> Image:
         
         img = page.get_raw_image()
 
@@ -141,10 +144,21 @@ class FinishingService(object):
             target_source_ratio = target_resolution / page.source_resolution
             img = self._change_resolution(img, target_source_ratio)
         
-        final_img = img.copy()
+        bg_img = img.convert("RGB")
+        bg_img, bg_color = self.algorithm_implementations[page.main_region.mode_algorithm].transform(bg_img)
+        bg_img, bg_color, bg_colors = self._substitute_bg_color(bg_img, bg_color, bg_colors)
+        final_img = self._apply_regions(page.sub_regions, bg_img, img, bg_color, target_source_ratio)
+        return final_img, bg_colors
+
+    def _substitute_bg_color(self, bg_img, bg_color, bg_colors):
         
-        all_regions = [page.main_region] + page.sub_regions
-        return self._apply_regions(all_regions, final_img, img, target_source_ratio)
+        for color in bg_colors:
+            if color == bg_color:
+                return bg_img, bg_color, bg_colors
+            if self.algorithm_helper.colors_are_similar(color, bg_color):
+                return self.algorithm_helper.replace_color_with_color(bg_img, bg_color, color), color, bg_colors
+        bg_colors = bg_colors + [bg_color]
+        return bg_img, bg_color, bg_colors
 
     def _change_resolution(self, img: Image, target_source_ratio: float) -> Image:
 
@@ -154,51 +168,30 @@ class FinishingService(object):
 
         return img.resize((new_width, new_height))
         
-    def _apply_regions(self, regions: [], final_img: Image, img: Image, target_source_ratio: float) -> Image:
+    def _apply_regions(self, regions: [], bg_img: Image, original_img: Image, bg_color: (), target_source_ratio: float) -> Image:
         
-        options = {}
+        final_img = bg_img
         for idx in range(0, len(regions)):
-            if regions[idx].mode_algorithm == Algorithm.WEISS:
-                if idx == 0:
-                    options["bg_color"] = self._get_white_for_image_mode(img.mode)
-                else:
-                    if not "bg_color" in options:
-                        options["bg_color"] = self._get_bg_color(regions[0].mode_algorithm, img, final_img.mode)
-            final_img = self._apply_region(regions[idx], final_img, img, target_source_ratio, options)
+            final_img = self._apply_region(regions[idx], final_img, original_img, bg_color, target_source_ratio)
     
         return final_img
     
-    def _get_white_for_image_mode(self, mode):
-
-        if mode == "1":
-            return 1
-        elif mode == "L" or mode == "LA":
-            return 255
-        else:
-            return(255, 255, 255)
-    
-    def _apply_region(self, region: Region, final_img: Image, img: Image, target_source_ratio, options={}) -> Image:
+    def _apply_region(self, region: Region, final_img: Image, img: Image, bg_color, target_source_ratio) -> Image:
         
         region_img = img.crop((round(region.x * target_source_ratio),
                                round(region.y * target_source_ratio),
                                round(region.x2 * target_source_ratio),
                                round(region.y2 * target_source_ratio)))
-        region_img = self._apply_algorithm(region_img, region.mode_algorithm, options)
-        if region_img.mode == "RGBA" and (final_img.mode == "L" or final_img.mode == "1"):
-            final_img = final_img.convert("RGBA")
-        if region_img.mode == "RGB" and (final_img.mode == "L" or final_img.mode == "1"):
-            final_img = final_img.convert("RGB")
-        if region_img.mode == "L" and final_img.mode == "1":
-            final_img = final_img.convert("L")
+        region_img, bg_color = self._apply_algorithm(region_img, region.mode_algorithm, bg_color)
         final_img.paste(region_img, (round(region.x * target_source_ratio),
                                      round(region.y * target_source_ratio),
                                      round(region.x2 * target_source_ratio),
                                      round(region.y2 * target_source_ratio)))
         return final_img
 
-    def _apply_algorithm(self, img: Image, algorithm: Algorithm, options={}):
+    def _apply_algorithm(self, img: Image, algorithm: Algorithm, bg_color):
                 
-        return self.algorithm_implementations[algorithm].transform(img, options)
+        return self.algorithm_implementations[algorithm].transform(img, bg_color)
 
     def _get_bg_color(self, algorithm: Algorithm, img: Image, mode):
                 
@@ -290,12 +283,18 @@ class TiffService(object):
 class PdfService:
     
     @inject
-    def __init__(self, ocr_service: OCRService, finishing_service: FinishingService):
+    def __init__(self,
+                 ocr_service: OCRService,
+                 finishing_service: FinishingService,
+                 algorithm_helper: AlgorithmHelper):
 
         self.ocr_service = ocr_service
         self.finishing_service = finishing_service
+        self.algorithm_helper = algorithm_helper
     
     def create_pdf_file(self, project: Project, filebase: str):
+   
+        bg_colors = []
    
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = os.path.join(temp_dir, "output.pdf")
@@ -311,7 +310,9 @@ class PdfService:
                 page_counter += 1
                 if page.skip_page:
                     continue
-                image = self.finishing_service.create_final_image(page, project.project_properties.pdf_resolution)
+                image, new_bg_colors = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
+                if project.project_properties.normalize_background_colors:
+                    bg_colors = new_bg_colors
                 width_in_dots, height_in_dots = image.size
             
                 page_width = width_in_dots * 72 / project.project_properties.pdf_resolution

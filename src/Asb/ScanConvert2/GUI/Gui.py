@@ -49,7 +49,7 @@ class FehPreviewer(object):
         
     def show(self, page: Page, resolution: int):
         
-        img = self.finishing_service.create_final_image(page, resolution)
+        img, bg_color = self.finishing_service.create_final_image(page, [], resolution)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))

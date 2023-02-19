@@ -71,6 +71,7 @@ class ProjectProperties(object):
         self.run_ocr = True
         self.create_pdfa = True
         self.ocr_lang = "deu"
+        self.normalize_background_colors = True
 
 class Region(object):
     '''
@@ -212,10 +213,12 @@ class Page:
         
         img = Image.open(self.scan.filename)
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
-        if img.mode == "RGBA":
-            img = img.convert("RGB")
-        if img.mode == "LA":
+        if img.mode == "1" or img.mode == "L":
+            pass
+        elif img.mode == "LA":
             img = img.convert("L")
+        else:
+            img = img.convert("RGB")
         if self.final_rotation_angle != 0:
             img = self._rotate_image(img, self.final_rotation_angle)
         img.info['dpi'] = (self.scan.resolution, self.scan.resolution)

@@ -19,9 +19,15 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
     threshold_niblack
 
 import numpy as np
+from math import sqrt
 
+WHITE = (255, 255, 255)
 
 AlgorithmImplementations = BoundKey("algorithm implementations")
+
+class TooManyColors(Exception):
+
+    pass
 
 class Algorithm(Enum):
 
@@ -30,12 +36,11 @@ class Algorithm(Enum):
     GRAY_WHITE=3
     OTSU=4
     SAUVOLA=5
-    #NIBLACK=6
-    FLOYD_STEINBERG=7
-    COLOR_PAPER_QUANTIZATION=8
-    COLOR_TEXT_QUANTIZATION=9
-    TWO_COLOR_QUANTIZATION=10
-    WEISS=11
+    FLOYD_STEINBERG=6
+    COLOR_PAPER_QUANTIZATION=7
+    COLOR_TEXT_QUANTIZATION=8
+    TWO_COLOR_QUANTIZATION=9
+    ERASE=10
 
     
     def __str__(self):
@@ -44,25 +49,26 @@ class Algorithm(Enum):
             Algorithm.GRAY: "Graustufen",
             Algorithm.GRAY_WHITE: "Grauer Text auf weißem Papier",
             Algorithm.OTSU: "Normal schwarzer Text auf weißem Papier",
-            #Algorithm.NIBLACK: "SW NIBLACK (Text fleckig)",
             Algorithm.SAUVOLA: "Krisseliger Text auf weißem Papier",
-            Algorithm.FLOYD_STEINBERG: "Photo",
+            Algorithm.FLOYD_STEINBERG: "SW Photo",
             Algorithm.COLOR_PAPER_QUANTIZATION: "Text auf farbigem Papier",
             Algorithm.COLOR_TEXT_QUANTIZATION: "Farbiger Text auf weißem Papier",
             Algorithm.TWO_COLOR_QUANTIZATION: "Farbiger Text auf farbigem Papier",
-            Algorithm.WEISS: "Ausradieren"
+            Algorithm.ERASE: "Ausradieren"
         }
     
         return texts[self]
 
-class ModeTransformationAlgorithm(object):
-    """
-    This is the base class for all ModeTransformationAlgorithms
-    """
+class AlgorithmHelper(object):
+
+    def get_white_for_mode(self, mode):
     
-    def transform(self, img: Image, options={}) -> Image:
-        
-        raise Exception("Please implement in child class")
+        if mode == "1":
+            return 1
+        elif mode == "L":
+            return 255
+        else:
+            return WHITE
     
     def get_image_resolution(self, img: Image) -> int:
         
@@ -78,27 +84,62 @@ class ModeTransformationAlgorithm(object):
     
         # newer versions of Pillow return a float
         return round(xres)
-    
-    def get_white_for_mode(self, mode):
+
+    def replace_color_with_color(self, img: Image, src_color: (), target_color: ()) -> Image:
         
-        if mode == "1":
-            return 1
-        elif mode == "L":
-            return 255
-        else:
-            return (255, 255, 255)
-    
-    def get_bg_color(self, img: Image, mode):
+        resolution = self.get_image_resolution(img)
         
-        return self.get_white_for_mode(mode)
+        np_array = np.array(img.convert("RGB"))
+        red, green, blue = np_array.T
+        src_color_areas = (red == src_color[0]) & (green == src_color[1]) & (blue == src_color[2])
+        np_array[src_color_areas.T] = target_color
+        
+        img = Image.fromarray(np_array)
+        img.info['dpi'] = (resolution, resolution)
+        
+        return img
+
+    def get_colors(self, img: Image):
+        
+        color_infos = img.convert("RGB").getcolors()
+        if color_infos is None:
+            raise TooManyColors()
+        
+        colors = []
+        for info in color_infos:
+            colors.append(info[1])
+        return colors
+
+    def replace_white_with_color(self, img: Image, color: ()) -> Image:
+        
+        return self.replace_color_with_color(img, WHITE, color)
+    
+    def colors_are_similar(self, color1: (), color2: ()):
+        
+        value1 = sqrt(color1[0]^2 + color1[1]^2 + color1[2]^2)
+        value2 = sqrt(color2[0]^2 + color2[1]^2 + color2[2]^2)
+        return abs(value1 - value2) < 25
+    
+class ModeTransformationAlgorithm(AlgorithmHelper):
+    """
+    This is the base class for all ModeTransformationAlgorithms
+    """
+    
+    def transform(self, img: Image, bg_color: () = None) -> (Image, ()):
+        
+        raise Exception("Please implement in child class")
     
 class NoneAlgorithm(ModeTransformationAlgorithm):
     """
     This implementation does nothing to the image.
     """
     
-    def transform(self, img:Image, options={})->Image:
-        return img
+    def transform(self, img:Image, bg_color: () = None)->Image:
+
+        # Replacement of background color does not make sense,
+        # so we just return the background color without
+        # application to the image
+        return (img, bg_color)
 
 class Gray(ModeTransformationAlgorithm):
     """
@@ -107,9 +148,12 @@ class Gray(ModeTransformationAlgorithm):
     transformed also to gray.
     """
     
-    def transform(self, img:Image, options={})->Image:
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
         
-        return img.convert("L")
+        # Replacement of background color does not make sense,
+        # so we just return the background color without
+        # application to the image
+        return (img.convert("L"), bg_color)
 
 class FloydSteinberg(ModeTransformationAlgorithm):
     """
@@ -117,8 +161,14 @@ class FloydSteinberg(ModeTransformationAlgorithm):
     which applies the Floyd-Steinberg algorithm
     """
 
-    def transform(self, img:Image, options={})->Image:
-        return img.convert("1")
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+        
+        img = img.convert("1")
+        if bg_color is None:
+            return (img, WHITE)
+        
+        return (self.replace_white_with_color(img, bg_color), bg_color)
+        
 
 class ThresholdAlgorithm(ModeTransformationAlgorithm):
     """
@@ -127,17 +177,28 @@ class ThresholdAlgorithm(ModeTransformationAlgorithm):
     to a PIL image.
     """
     
-    def apply_cv2_mask(self, img:Image, mask_implementation, **nargs)->Image:
+    def apply_cv2_mask(self, img:Image, bg_color: (), mask_implementation, **nargs) -> (Image, ()):
         
         resolution = self.get_image_resolution(img)
         in_array = np.asarray(img.convert("L"))
         mask = mask_implementation(in_array, **nargs)
         out_array = in_array > mask
+
         img = Image.fromarray(out_array)
         img.info['dpi'] = (resolution, resolution)
-        img.convert("1")
-
-        return img
+        
+        if bg_color is None:
+            return (img.convert("1"), WHITE)
+        
+        np_array = np.array(img.convert("RGB"))
+        red, green, blue = np_array.T
+        white_areas = (red == 255) & (green == 255) & (blue == 255)
+        np_array[white_areas.T] = bg_color
+        
+        img = Image.fromarray(np_array)
+        img.info['dpi'] = (resolution, resolution)
+        
+        return (img, bg_color)
 
 class Otsu(ThresholdAlgorithm):
     """
@@ -147,8 +208,8 @@ class Otsu(ThresholdAlgorithm):
     if the background is spotted or the text color uneven.
     """
     
-    def transform(self, img:Image, options={})->Image:
-        return self.apply_cv2_mask(img, threshold_otsu)
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+        return self.apply_cv2_mask(img, bg_color, threshold_otsu)
 
 class Sauvola(ThresholdAlgorithm):
     """
@@ -157,8 +218,8 @@ class Sauvola(ThresholdAlgorithm):
     quantization on slanted characters.
     """
     
-    def transform(self, img:Image, options={})->Image:
-        return self.apply_cv2_mask(img, threshold_sauvola, window_size=11)
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+        return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=11)
     
 class Niblack(ThresholdAlgorithm):
     """
@@ -166,8 +227,8 @@ class Niblack(ThresholdAlgorithm):
     a use case where either Otsu or Sauvola would have produced a superior result.
     """
 
-    def transform(self, img:Image, options={})->Image:
-        return self.apply_cv2_mask(img, threshold_niblack, window_size=11)
+    def transform(self, img:Image, bg_color) -> (Image, ()):
+        return self.apply_cv2_mask(img, bg_color, threshold_niblack, window_size=11)
 
 class QuantizationAlgorithm(ModeTransformationAlgorithm):
     """
@@ -175,7 +236,7 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
     extract the 2 dominant colors of an image
     """
     
-    def _apply_quantization(self, img: Image, no_of_colors=2) -> Image:
+    def _apply_quantization(self, img: Image, no_of_colors=2) -> (Image, ()):
         """
         Uses the k-means algorithm to quantize the image for two colors
         """
@@ -192,9 +253,9 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
         new_img = Image.fromarray(final_img_array)
         new_img.info['dpi'] = img.info['dpi']
         
-        return new_img
+        return (new_img, self._find_bg_color(new_img))
 
-    def _find_bg_color(self, quantized_img: Image):
+    def _find_bg_color(self, quantized_img: Image) -> ():
 
         colors = quantized_img.getcolors()
         sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
@@ -204,7 +265,7 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
         else: 
             return colors[1][1] 
     
-    def _find_fg_color(self, quantized_img: Image):
+    def _find_fg_color(self, quantized_img: Image) -> ():
         
         colors = quantized_img.getcolors()
         sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
@@ -216,13 +277,13 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
         
 class TwoColors(QuantizationAlgorithm):
     
-    def transform(self, img:Image, options={})->Image:
-        return self._apply_quantization(img)
-
-    def get_bg_color(self, img: Image, mode):
-
-        quantized_img = self._apply_quantization(img, 2)
-        return self._find_bg_color(quantized_img)        
+    def transform(self, img:Image, bg_color: () = None)-> (Image, ()):
+        
+        (img, calculated_bg_color) = self._apply_quantization(img)
+        if bg_color is None:
+            return (img, calculated_bg_color)
+        else:
+            return (self.replace_color_with_color(img, calculated_bg_color, bg_color), bg_color)
 
 class ColorTextOnWhite(QuantizationAlgorithm):
     """
@@ -232,57 +293,47 @@ class ColorTextOnWhite(QuantizationAlgorithm):
     with this algorithm to these color segments and retain the color.
     """
     
-    def transform(self, img:Image, options={})->Image:
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
         
-        quantized_img = self._apply_quantization(img)
-        bg_color = self._find_bg_color(quantized_img)
-        
-        np_img = np.array(quantized_img)   # "data" is a height x width x 4 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
+        if bg_color is None:
+            bg_color = WHITE
+            
+        quantized_img, quantized_bg_color = self._apply_quantization(img)
 
-        # Replace white with red... (leaves alpha values alone...)
-        white_areas = (red == bg_color[0]) & (green == bg_color[1]) & (blue == bg_color[2])
-        np_img[white_areas.T] = (255, 255, 255) # Transpose back needed
+        np_img = np.array(quantized_img)
+        red, green, blue = np_img.T
+
+        bg_areas = (red == quantized_bg_color[0]) & (green == quantized_bg_color[1]) & (blue == quantized_bg_color[2])
+        np_img[bg_areas.T] = bg_color
 
         final_img = Image.fromarray(np_img)
         final_img.info['dpi'] = img.info['dpi']
         
-        return final_img
+        return (final_img, bg_color)
 
 class BlackTextOnColor(QuantizationAlgorithm):
     """
     This is the algorithm to use when you have black printed on a color paper.
     """
     
-    def transform(self, img:Image, options={})->Image:
+    def transform(self, img:Image, bg_color: () = None)  -> (Image, ()):
         
-        quantized_img = self._apply_quantization(img)
+        quantized_img, calculated_bg_color = self._apply_quantization(img)
         fg_color = self._find_fg_color(quantized_img)
         
-        np_img = np.array(quantized_img)   # "data" is a height x width x 3 numpy array
-        red, green, blue = np_img.T # Temporarily unpack the bands for readability
+        np_img = np.array(quantized_img)
+        red, green, blue = np_img.T
 
         black_areas = (red == fg_color[0]) & (green == fg_color[1]) & (blue == fg_color[2])
-        np_img[black_areas.T] = (0, 0, 0) # Transpose back needed
+        np_img[black_areas.T] = (0, 0, 0)
 
         final_img = Image.fromarray(np_img)
         final_img.info['dpi'] = img.info['dpi']
         
-        return final_img
+        if bg_color is None:
+            return (final_img, calculated_bg_color)
 
-    def get_bg_color(self, img: Image, mode):
-
-        if img.mode == "1":
-            # Does not make sense but might happen
-            return 1
-        
-        quantized_img = self._apply_quantization(img, 2)
-        color = self._find_bg_color(quantized_img)
-        
-        if img.mode == "L":
-            return color[0]
-        
-        return color       
+        return (self.replace_color_with_color(final_img, calculated_bg_color, bg_color), bg_color)
 
 class GrayTextOnWhite(Otsu):
     """
@@ -291,9 +342,9 @@ class GrayTextOnWhite(Otsu):
     white, this is the algorithm to use
     """
     
-    def transform(self, img:Image, options={})->Image:
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
         
-        mask = super().transform(img)
+        (mask, col) = super().transform(img, bg_color)
         mask = mask.convert("RGB")
         mask = mask.filter(ImageFilter.BLUR)
 
@@ -307,18 +358,28 @@ class GrayTextOnWhite(Otsu):
         final_img = Image.fromarray(np_img)
         final_img.info['dpi'] = img.info['dpi']
         
-        return final_img.convert("L")
+        if bg_color is None or bg_color == WHITE:
+            return (final_img.convert("L"), WHITE)
+        
+        return (self.replace_white_with_color(final_img, bg_color), bg_color)
     
-class White(ModeTransformationAlgorithm):
+class Erase(ModeTransformationAlgorithm):
     """
     This returns just a white image in the same size to patch
     over holes, missing corners etc. on the scan.
     """
     
-    def transform(self, img:Image, options={})->Image:
-        new_img = Image.new(img.mode, img.size, options["bg_color"])
-        new_img.info['dpi'] = img.info['dpi']
-        return new_img
+    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+        
+        resolution = self.get_image_resolution(img)
+        if bg_color is None or bg_color == WHITE:
+            img = Image.new(img.mode, img.size, self.get_white_for_mode(img.mode))
+            img.info['dpi'] = (resolution, resolution)
+            return (img, WHITE)
+        
+        img = Image.new("RGB", img.size, bg_color)
+        img.info['dpi'] = (resolution, resolution)
+        return (img, bg_color)
     
 class AlgorithmModule(Module):
     """
@@ -335,8 +396,7 @@ class AlgorithmModule(Module):
                 Algorithm.FLOYD_STEINBERG: FloydSteinberg(),
                 Algorithm.OTSU: Otsu(),
                 Algorithm.SAUVOLA: Sauvola(),
-                #Algorithm.NIBLACK: Niblack(),
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
-                Algorithm.WEISS: White()}
+                Algorithm.ERASE: Erase()}

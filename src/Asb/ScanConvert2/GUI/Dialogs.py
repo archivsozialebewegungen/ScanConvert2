@@ -132,6 +132,11 @@ class PropertiesDialog(QDialog):
         self.create_pdfa_checkbox = QCheckBox(self)
         input_column.addWidget(self.create_pdfa_checkbox)
         
+        label = QLabel("Farbhintergründe vereinheitlichen:")
+        label_column.addWidget(label)
+        self.color_normalization_checkbox = QCheckBox(self)
+        input_column.addWidget(self.color_normalization_checkbox)
+
         layout.addWidget(buttonBox)
         
         self.setLayout(layout)
@@ -150,6 +155,7 @@ class PropertiesDialog(QDialog):
         properties.run_ocr = self.run_ocr_checkbox.isChecked()
         properties.ocr_lang = self.ocr_lang_select.currentText()
         properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
+        properties.normalize_background_colors = self.color_normalization_checkbox.isChecked()
         return properties
         
     def _set_properties(self, properties: ProjectProperties):
@@ -162,5 +168,6 @@ class PropertiesDialog(QDialog):
                 self.ocr_lang_select.setCurrentIndex(idx)
                 break
         self.create_pdfa_checkbox.setChecked(properties.create_pdfa)
+        self.color_normalization_checkbox.setChecked(properties.normalize_background_colors)
 
     project_properties = property(_get_properties, _set_properties)
