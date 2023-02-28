@@ -21,6 +21,8 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
 import numpy as np
 from math import sqrt
 
+Image.MAX_IMAGE_PIXELS = None
+
 WHITE = (255, 255, 255)
 
 AlgorithmImplementations = BoundKey("algorithm implementations")

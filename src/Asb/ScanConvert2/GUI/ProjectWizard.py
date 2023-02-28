@@ -331,6 +331,6 @@ class ProjectWizardPageScans(QWizardPage):
     def nextId(self, *args, **kwargs):
         
         for scan in self.scans:
-            if scan.resolution is None:
+            if not scan.is_resolution_sane():
                 return DEFAULT_RESOLUTION_PAGE
         return PAGE_PER_SCAN_PAGE

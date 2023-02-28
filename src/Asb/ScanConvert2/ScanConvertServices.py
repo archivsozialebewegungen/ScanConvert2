@@ -322,7 +322,10 @@ class PdfService:
                                  height_in_dots * inch / project.project_properties.pdf_resolution))
 
                 img_stream = io.BytesIO()
-                image.save(img_stream, format='png')
+                if image.mode == "1":
+                    image.save(img_stream, format='png')
+                else:
+                    image.save(img_stream, format='jpeg', quality=65, optimize=True)
                 img_stream.seek(0)
                 img_reader = ImageReader(img_stream)
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
