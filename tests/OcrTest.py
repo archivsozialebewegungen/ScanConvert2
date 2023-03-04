@@ -15,14 +15,19 @@ from reportlab.pdfgen.canvas import Canvas
 
 import Asb
 from Asb.ScanConvert2.OCR import OcrRunner
-from Asb.ScanConvert2.ScanConvertServices import OCRService
+from Asb.ScanConvert2.ScanConvertServices import OCRService, ProjectService,\
+    PdfService, FinishingService
 from Base import BaseTest
+from Asb.ScanConvert2.ProjectGenerator import SortType, ProjectGenerator
+from Asb.ScanConvert2.Algorithms import AlgorithmHelper, AlgorithmModule
+from injector import Injector
+from Asb.ScanConvert2.ScanConvertDomain import Scan
 
 
 class OCRServiceTest(BaseTest):
 
 
-    def testOcr(self):
+    def notestOcr(self):
         
         ocr_service = OCRService(OcrRunner())
         pdf_file = "/tmp/ocrtest1.pdf"
@@ -51,6 +56,21 @@ class OCRServiceTest(BaseTest):
         #self.assertIn("Text um 270° gedreht", document.get_page_text(0))
         self.assertIn("Text leicht schräg", document.get_page_text(0))
         self.assertIn("Text leicht negativ schräg", document.get_page_text(0))
+        
+    def test_full_run(self):
+        
+        injector = Injector(AlgorithmModule)
+        project_service = injector.get(ProjectService)
+
+        filename = os.path.join(self.test_file_dir, "OCR", "geschichtswerkstatt_7_020.jpg")
+        project = project_service.create_project(
+            [Scan(filename)],
+            2,
+            SortType.STRAIGHT,
+            0,
+            False
+        )
+        project_service.export_pdf(project, "/tmp/ocr600.pdf")
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

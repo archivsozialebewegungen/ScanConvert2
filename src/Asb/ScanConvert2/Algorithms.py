@@ -114,20 +114,23 @@ class AlgorithmHelper(object):
 
     def replace_white_with_color(self, img: Image, color: ()) -> Image:
         
+        if color == WHITE:
+            return img
+        
         return self.replace_color_with_color(img, WHITE, color)
     
     def colors_are_similar(self, color1: (), color2: ()):
         
         value1 = sqrt(color1[0]^2 + color1[1]^2 + color1[2]^2)
         value2 = sqrt(color2[0]^2 + color2[1]^2 + color2[2]^2)
-        return abs(value1 - value2) < 25
+        return abs(value1 - value2) < 5
     
 class ModeTransformationAlgorithm(AlgorithmHelper):
     """
     This is the base class for all ModeTransformationAlgorithms
     """
     
-    def transform(self, img: Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img: Image, bg_color: () = WHITE) -> (Image, ()):
         
         raise Exception("Please implement in child class")
     
@@ -136,7 +139,7 @@ class NoneAlgorithm(ModeTransformationAlgorithm):
     This implementation does nothing to the image.
     """
     
-    def transform(self, img:Image, bg_color: () = None)->Image:
+    def transform(self, img:Image, bg_color: () = WHITE)->Image:
 
         # Replacement of background color does not make sense,
         # so we just return the background color without
@@ -150,7 +153,7 @@ class Gray(ModeTransformationAlgorithm):
     transformed also to gray.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         # Replacement of background color does not make sense,
         # so we just return the background color without
@@ -163,7 +166,7 @@ class FloydSteinberg(ModeTransformationAlgorithm):
     which applies the Floyd-Steinberg algorithm
     """
 
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         img = img.convert("1")
         if bg_color is None:
@@ -210,7 +213,7 @@ class Otsu(ThresholdAlgorithm):
     if the background is spotted or the text color uneven.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         return self.apply_cv2_mask(img, bg_color, threshold_otsu)
 
 class Sauvola(ThresholdAlgorithm):
@@ -220,7 +223,7 @@ class Sauvola(ThresholdAlgorithm):
     quantization on slanted characters.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=11)
     
 class Niblack(ThresholdAlgorithm):
@@ -295,7 +298,7 @@ class ColorTextOnWhite(QuantizationAlgorithm):
     with this algorithm to these color segments and retain the color.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         if bg_color is None:
             bg_color = WHITE
@@ -344,7 +347,7 @@ class GrayTextOnWhite(Otsu):
     white, this is the algorithm to use
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         (mask, col) = super().transform(img, bg_color)
         mask = mask.convert("RGB")
@@ -371,7 +374,7 @@ class Erase(ModeTransformationAlgorithm):
     over holes, missing corners etc. on the scan.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         resolution = self.get_image_resolution(img)
         if bg_color is None or bg_color == WHITE:
