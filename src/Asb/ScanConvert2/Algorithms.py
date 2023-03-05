@@ -12,7 +12,7 @@ Created on 18.01.2023
 '''
 from enum import Enum
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 import cv2
 from injector import Module, BoundKey, provider, singleton
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
@@ -20,6 +20,7 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
 
 import numpy as np
 from math import sqrt
+from numpy.core._multiarray_umath import dtype
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -43,6 +44,8 @@ class Algorithm(Enum):
     COLOR_TEXT_QUANTIZATION=8
     TWO_COLOR_QUANTIZATION=9
     ERASE=10
+    STENCIL_PRINT_GOOD=11
+    STENCIL_PRINT_BAD=12
 
     
     def __str__(self):
@@ -56,7 +59,9 @@ class Algorithm(Enum):
             Algorithm.COLOR_PAPER_QUANTIZATION: "Text auf farbigem Papier",
             Algorithm.COLOR_TEXT_QUANTIZATION: "Farbiger Text auf weißem Papier",
             Algorithm.TWO_COLOR_QUANTIZATION: "Farbiger Text auf farbigem Papier",
-            Algorithm.ERASE: "Ausradieren"
+            Algorithm.ERASE: "Ausradieren",
+            Algorithm.STENCIL_PRINT_GOOD: "Guter Matrizendruck",
+            Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck"
         }
     
         return texts[self]
@@ -224,7 +229,7 @@ class Sauvola(ThresholdAlgorithm):
     """
     
     def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
-        return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=11)
+        return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=51)
     
 class Niblack(ThresholdAlgorithm):
     """
@@ -234,6 +239,37 @@ class Niblack(ThresholdAlgorithm):
 
     def transform(self, img:Image, bg_color) -> (Image, ()):
         return self.apply_cv2_mask(img, bg_color, threshold_niblack, window_size=11)
+
+class GoodStencilPrint(ThresholdAlgorithm):
+
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
+
+        img_rgb = img.convert("RGB")
+        np_rgb = np.asarray(img_rgb)
+        np_converted = cv2.cvtColor(np_rgb, cv2.COLOR_RGB2HSV)
+        (p1, p2, p3) = np_converted.transpose()
+
+        np_gray = np.array([p3, p3, p3]).transpose()
+        img_gray = Image.fromarray(np_gray)
+        img_gray.info['dpi'] = img.info['dpi']
+        
+        return Otsu().transform(img_gray)
+    
+class BadStencilPrint(ThresholdAlgorithm):
+    
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
+
+        img_rgb = img.convert("RGB")
+        np_rgb = np.asarray(img_rgb)
+        np_converted = cv2.cvtColor(np_rgb, cv2.COLOR_RGB2HLS)
+        (p1, p2, p3) = np_converted.transpose()
+
+        np_gray = np.array([p3, p3, p3]).transpose()
+        img_gray = Image.fromarray(np_gray)
+        img_gray.info['dpi'] = img.info['dpi']
+        
+        return Sauvola().transform(img_gray)
+
 
 class QuantizationAlgorithm(ModeTransformationAlgorithm):
     """
@@ -404,4 +440,6 @@ class AlgorithmModule(Module):
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
+                Algorithm.STENCIL_PRINT_GOOD: GoodStencilPrint(),
+                Algorithm.STENCIL_PRINT_BAD: BadStencilPrint(),
                 Algorithm.ERASE: Erase()}
