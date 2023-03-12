@@ -55,7 +55,8 @@ class PageSegmentor(object):
         self.show_bin_img(hor_smeared)
         ver_smeared = self.smear_vertical(bin_img, 150)
         self.show_bin_img(ver_smeared)
-        final = np.logical_or(hor_smeared, ver_smeared)
+        combined = np.logical_or(hor_smeared, ver_smeared)
+        final = self.smear_horizontal(combined, 25)
         self.show_bin_img(final)
         return segments
         
@@ -67,8 +68,8 @@ class PageSegmentor(object):
     
     def smear_vertical(self, bin_img: ndarray, constraint: int):
         
-        smeared_img = self.smear_horizontal(np.rot90(bin_img), constraint)
-        return np.rot90(smeared_img, -1)
+        smeared_img = self.smear_horizontal(np.rot90(bin_img, -1), constraint)
+        return np.rot90(smeared_img)
 
     def smear_horizontal(self, bin_img: ndarray, constraint: int):
         
@@ -76,19 +77,19 @@ class PageSegmentor(object):
         width = bin_img.shape[1]
         smeared_img = bin_img.copy()
         for row_idx in range(0, height):
-            if row_idx % 100 == 0:
+            if row_idx % 10 == 0:
                 print(row_idx)
             line = bin_img[row_idx]
-            for col_idx in range(0, width):
-                if bin_img[row_idx, col_idx] == BLACK:
-                    continue
-                start_constraint = col_idx + 1
-                end_constraint = start_constraint + constraint
-                if end_constraint > width:
-                    end_constraint = width
-                whites = np.add.reduce(line[start_constraint:end_constraint])
-                if whites < end_constraint - start_constraint:
-                    smeared_img[row_idx, col_idx] = BLACK
+            col_idx = 0
+            last_black = -1
+            while col_idx < width:
+                if line[col_idx] == BLACK:
+                    whites = col_idx - last_black
+                    if whites > 0 and whites < constraint:
+                        smeared_img[row_idx, last_black +1:col_idx] = BLACK
+                    last_black = col_idx
+                col_idx += 1
+                
         return smeared_img
     
     def show_bin_img(self, bin_img: ndarray, title: str = "Binarized image"):
