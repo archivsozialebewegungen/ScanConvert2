@@ -132,6 +132,7 @@ class FinishingService(object):
 
         if page.source_resolution != target_resolution:
             img = self._change_resolution(img, target_resolution / page.source_resolution)
+            img.info['dpi'] = (target_resolution, target_resolution)
     
         return img
     
@@ -150,6 +151,19 @@ class FinishingService(object):
         final_img = self._apply_regions(page.sub_regions, bg_img, img, bg_color, target_source_ratio)
         return final_img, bg_colors
 
+    def create_pdf_image(self, page: Page, target_resolution: int) -> Image:
+        
+        img = page.get_raw_image()
+
+        target_source_ratio = 1.0        
+        if page.source_resolution != target_resolution:
+            target_source_ratio = target_resolution / page.source_resolution
+            img = self._change_resolution(img, target_source_ratio)
+        
+        bg_img = img.convert("RGB")
+        bg_img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(bg_img)
+        return bg_img
+
     def _substitute_bg_color(self, bg_img, bg_color, bg_colors):
         
         for color in bg_colors:
@@ -166,11 +180,15 @@ class FinishingService(object):
         new_width = int(current_width * target_source_ratio)
         new_height = int(current_height * target_source_ratio)
 
-        return img.resize((new_width, new_height))
+        resized_img = img.resize((new_width, new_height))
+        new_dpi = img.info['dpi'][0] * target_source_ratio
+        resized_img.info['dpi'] = (new_dpi, new_dpi)
+        return resized_img
+        
         
     def _apply_regions(self, regions: [], bg_img: Image, original_img: Image, bg_color: (), target_source_ratio: float) -> Image:
         
-        final_img = bg_img
+        final_img = bg_img.copy()
         for idx in range(0, len(regions)):
             final_img = self._apply_region(regions[idx], final_img, original_img, bg_color, target_source_ratio)
     
@@ -294,7 +312,7 @@ class PdfService:
     
     def create_pdf_file(self, project: Project, filebase: str):
    
-        bg_colors = []
+        bg_colors = [(0,0,0)]
    
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = os.path.join(temp_dir, "output.pdf")
@@ -322,12 +340,15 @@ class PdfService:
                                  height_in_dots * inch / project.project_properties.pdf_resolution))
 
                 img_stream = io.BytesIO()
-                image.save(img_stream, format='png')
+                if image.mode == "1":
+                    image.save(img_stream, format='png')
+                else:
+                    image.save(img_stream, format='jpeg', quality=65, optimize=True)
                 img_stream.seek(0)
                 img_reader = ImageReader(img_stream)
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
                 if project.project_properties.run_ocr:
-                    pdf = self.ocr_service.add_ocrresult_to_pdf(image, pdf, project.project_properties.ocr_lang)
+                    pdf = self.ocr_service.add_ocrresult_to_pdf(self.finishing_service.create_pdf_image(page, project.project_properties.pdf_resolution), pdf, project.project_properties.ocr_lang)
                 pdf.showPage()
         
             pdf.save()

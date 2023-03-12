@@ -12,7 +12,7 @@ Created on 18.01.2023
 '''
 from enum import Enum
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 import cv2
 from injector import Module, BoundKey, provider, singleton
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
@@ -20,6 +20,9 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
 
 import numpy as np
 from math import sqrt
+from numpy.core._multiarray_umath import dtype
+
+Image.MAX_IMAGE_PIXELS = None
 
 WHITE = (255, 255, 255)
 
@@ -41,6 +44,8 @@ class Algorithm(Enum):
     COLOR_TEXT_QUANTIZATION=8
     TWO_COLOR_QUANTIZATION=9
     ERASE=10
+    STENCIL_PRINT_GOOD=11
+    STENCIL_PRINT_BAD=12
 
     
     def __str__(self):
@@ -54,7 +59,9 @@ class Algorithm(Enum):
             Algorithm.COLOR_PAPER_QUANTIZATION: "Text auf farbigem Papier",
             Algorithm.COLOR_TEXT_QUANTIZATION: "Farbiger Text auf weißem Papier",
             Algorithm.TWO_COLOR_QUANTIZATION: "Farbiger Text auf farbigem Papier",
-            Algorithm.ERASE: "Ausradieren"
+            Algorithm.ERASE: "Ausradieren",
+            Algorithm.STENCIL_PRINT_GOOD: "Guter Matrizendruck",
+            Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck"
         }
     
         return texts[self]
@@ -112,20 +119,23 @@ class AlgorithmHelper(object):
 
     def replace_white_with_color(self, img: Image, color: ()) -> Image:
         
+        if color == WHITE:
+            return img
+        
         return self.replace_color_with_color(img, WHITE, color)
     
     def colors_are_similar(self, color1: (), color2: ()):
         
         value1 = sqrt(color1[0]^2 + color1[1]^2 + color1[2]^2)
         value2 = sqrt(color2[0]^2 + color2[1]^2 + color2[2]^2)
-        return abs(value1 - value2) < 25
+        return abs(value1 - value2) < 5
     
 class ModeTransformationAlgorithm(AlgorithmHelper):
     """
     This is the base class for all ModeTransformationAlgorithms
     """
     
-    def transform(self, img: Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img: Image, bg_color: () = WHITE) -> (Image, ()):
         
         raise Exception("Please implement in child class")
     
@@ -134,7 +144,7 @@ class NoneAlgorithm(ModeTransformationAlgorithm):
     This implementation does nothing to the image.
     """
     
-    def transform(self, img:Image, bg_color: () = None)->Image:
+    def transform(self, img:Image, bg_color: () = WHITE)->Image:
 
         # Replacement of background color does not make sense,
         # so we just return the background color without
@@ -148,7 +158,7 @@ class Gray(ModeTransformationAlgorithm):
     transformed also to gray.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         # Replacement of background color does not make sense,
         # so we just return the background color without
@@ -161,7 +171,7 @@ class FloydSteinberg(ModeTransformationAlgorithm):
     which applies the Floyd-Steinberg algorithm
     """
 
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         img = img.convert("1")
         if bg_color is None:
@@ -208,7 +218,7 @@ class Otsu(ThresholdAlgorithm):
     if the background is spotted or the text color uneven.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         return self.apply_cv2_mask(img, bg_color, threshold_otsu)
 
 class Sauvola(ThresholdAlgorithm):
@@ -218,8 +228,8 @@ class Sauvola(ThresholdAlgorithm):
     quantization on slanted characters.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
-        return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=11)
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
+        return self.apply_cv2_mask(img, bg_color, threshold_sauvola, window_size=51)
     
 class Niblack(ThresholdAlgorithm):
     """
@@ -229,6 +239,37 @@ class Niblack(ThresholdAlgorithm):
 
     def transform(self, img:Image, bg_color) -> (Image, ()):
         return self.apply_cv2_mask(img, bg_color, threshold_niblack, window_size=11)
+
+class GoodStencilPrint(ThresholdAlgorithm):
+
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
+
+        img_rgb = img.convert("RGB")
+        np_rgb = np.asarray(img_rgb)
+        np_converted = cv2.cvtColor(np_rgb, cv2.COLOR_RGB2HSV)
+        (p1, p2, p3) = np_converted.transpose()
+
+        np_gray = np.array([p3, p3, p3]).transpose()
+        img_gray = Image.fromarray(np_gray)
+        img_gray.info['dpi'] = img.info['dpi']
+        
+        return Otsu().transform(img_gray)
+    
+class BadStencilPrint(ThresholdAlgorithm):
+    
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
+
+        img_rgb = img.convert("RGB")
+        np_rgb = np.asarray(img_rgb)
+        np_converted = cv2.cvtColor(np_rgb, cv2.COLOR_RGB2HLS)
+        (p1, p2, p3) = np_converted.transpose()
+
+        np_gray = np.array([p3, p3, p3]).transpose()
+        img_gray = Image.fromarray(np_gray)
+        img_gray.info['dpi'] = img.info['dpi']
+        
+        return Sauvola().transform(img_gray)
+
 
 class QuantizationAlgorithm(ModeTransformationAlgorithm):
     """
@@ -293,7 +334,7 @@ class ColorTextOnWhite(QuantizationAlgorithm):
     with this algorithm to these color segments and retain the color.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         if bg_color is None:
             bg_color = WHITE
@@ -342,7 +383,7 @@ class GrayTextOnWhite(Otsu):
     white, this is the algorithm to use
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         (mask, col) = super().transform(img, bg_color)
         mask = mask.convert("RGB")
@@ -369,7 +410,7 @@ class Erase(ModeTransformationAlgorithm):
     over holes, missing corners etc. on the scan.
     """
     
-    def transform(self, img:Image, bg_color: () = None) -> (Image, ()):
+    def transform(self, img:Image, bg_color: () = WHITE) -> (Image, ()):
         
         resolution = self.get_image_resolution(img)
         if bg_color is None or bg_color == WHITE:
@@ -399,4 +440,6 @@ class AlgorithmModule(Module):
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
+                Algorithm.STENCIL_PRINT_GOOD: GoodStencilPrint(),
+                Algorithm.STENCIL_PRINT_BAD: BadStencilPrint(),
                 Algorithm.ERASE: Erase()}

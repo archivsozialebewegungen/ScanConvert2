@@ -36,7 +36,8 @@ class NumberOfPagesDetector:
         double_size = max(sizes)
         
         for i in range(len(sizes)):
-            if abs((double_size / sizes[i]) - 2) < 0.1:
+            ratio = double_size / sizes[i]
+            if  abs(ratio -2) < 0.25:
                 scans[i].no_of_pages = 1
 
         return scans

@@ -136,6 +136,17 @@ class Scan(object):
             return Mode.COLOR
         
         raise UnknownImageMode(img.mode)
+    
+    def is_resolution_sane(self):
+        
+        if self.resolution is None:
+            return False
+        
+        if self.width * 1.0 / self.resolution > 22:
+            # We consider a with > 22 inches as insane
+            return False
+        
+        return True
 
 class NoRegionsOnPageException(Exception):
     
