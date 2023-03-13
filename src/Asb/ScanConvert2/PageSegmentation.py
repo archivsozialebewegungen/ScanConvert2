@@ -17,21 +17,89 @@ ImageShow.register(ImageShow.EogViewer, -1)
 BLACK = False
 WHITE = True
 
+def show_bin_img(bin_img: ndarray, title: str = "Binarized image"):
+        
+    img = Image.fromarray(bin_img)
+    img.save("/tmp/test.png")
+    img.show(title)
+    
 class SegmentType(Enum):
     
     TEXT = 1
     PHOTO = 2
     DRAWING = 3
-
-class Segment(object):
     
-    def __init__(self, x:int, y:int, width:int, height:int, segment_type: SegmentType):
+class BoundingBox(object):
+    
+    def __init__(self, x, y, width, height):
         
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self.segment_type = segment_type
+        
+    size = property(lambda self: self.width * self.height)
+
+class Segment(object):
+    
+    def __init__(self, label, stats, label_matrix):
+        
+        self.label_matrix = label_matrix
+        self.label = label
+        self.stats = stats
+        self._mask = None
+        self.bounding_box = BoundingBox(self.stats[cv2.CC_STAT_LEFT],
+                                        self.stats[cv2.CC_STAT_TOP],
+                                        self.stats[cv2.CC_STAT_WIDTH],
+                                        self.stats[cv2.CC_STAT_HEIGHT])
+        
+    def _get_mask(self):
+        
+        if self._mask is not None:
+            return self._mask
+        
+        background = 255
+        if self.label == 255:
+            background = 245
+        
+        matrix_copy = self.label_matrix.copy()
+        matrix_copy[matrix_copy != self.label] = background
+        matrix_copy[matrix_copy == self.label] = 0
+        if background == 245:
+            matrix_copy[matrix_copy == background] = 255
+            
+        self._mask = matrix_copy
+        return self._mask
+    
+    def _get_bb_mask(self):
+        
+        if self._mask is not None:
+            return self._mask
+        
+        mask_img = Image.new("L", (self.label_matrix.shape[1], self.label_matrix.shape[0]), 255)
+        bb = Image.new("L", (self.bounding_box.width, self.bounding_box.height), 0)
+        mask_img.paste(bb, (self.bounding_box.x, self.bounding_box.y))
+        return np.asarray(mask_img)
+    
+    def overlay_on_image(self, img):
+        
+        background = img.convert("RGBA")
+                
+        ndarray_img = np.asarray(img)
+        segment_extract = np.bitwise_or(ndarray_img, self.mask)
+        segment = Image.fromarray(segment_extract)
+        segment = segment.convert("1") # Floyd-Steinberg dithering
+        segment = segment.convert("RGBA")
+        
+        mask_img = Image.fromarray(self.mask)
+        mask_img = mask_img.convert("1")
+        background.putalpha(mask_img)
+                
+        return Image.alpha_composite(segment, background).convert(img.mode)
+    
+    mask = property(_get_bb_mask)
+        
+        
 
 
 class PageSegmentor(object):
@@ -48,23 +116,42 @@ class PageSegmentor(object):
     
     def find_segments(self, img: Image) -> []:
         
+        return self.collect_stats(img)
+    
+    def collect_stats(self, original_img: Image):
+        
+        gray_img = original_img.convert("L")
+
+        binary_img = self.binarize(gray_img)
+        smeared_img = self.smear_image(binary_img)
+        smeared_gray_img = np.array(smeared_img, dtype=np.uint8)
+        smeared_gray_img[smeared_gray_img == 0] = 255
+        smeared_gray_img[smeared_gray_img == 1] = 0
+
+        connectivity = 4
+        no_of_components, label_matrix, stats, centroids = cv2.connectedComponentsWithStats(smeared_gray_img, connectivity)
         segments = []
-        bin_img = self.binarize(img)
-        self.show_bin_img(bin_img)
-        hor_smeared = self.smear_horizontal(bin_img, 250)
-        self.show_bin_img(hor_smeared)
-        ver_smeared = self.smear_vertical(bin_img, 150)
-        self.show_bin_img(ver_smeared)
-        combined = np.logical_or(hor_smeared, ver_smeared)
-        final = self.smear_horizontal(combined, 25)
-        self.show_bin_img(final)
+        for label in range(1, no_of_components):
+            segments.append(Segment(label, stats[label], label_matrix))
         return segments
+    
+    def smear_image(self, binary_img: Image) -> Image:
+
+        print("First horizontal smear")
+        hor_smeared = self.smear_horizontal(binary_img, 300)
+        print("Vertical smear")
+        ver_smeared = self.smear_vertical(binary_img, 300)
+        print("Second horizontal smear")
+        combined = np.logical_or(hor_smeared, ver_smeared)
+        final = self.smear_horizontal(combined, 20)
+        print("Smearing done.")
+        return final
         
-    def binarize(self, img: Image) -> ndarray:
+    def binarize(self, gray_img: Image) -> ndarray:
         
-        in_array = np.asarray(img.convert("L"))
-        mask = threshold_otsu(in_array)
-        return in_array > mask
+        in_array = np.asarray(gray_img)
+        threshold = threshold_otsu(in_array)
+        return in_array > threshold
     
     def smear_vertical(self, bin_img: ndarray, constraint: int):
         
@@ -77,8 +164,6 @@ class PageSegmentor(object):
         width = bin_img.shape[1]
         smeared_img = bin_img.copy()
         for row_idx in range(0, height):
-            if row_idx % 10 == 0:
-                print(row_idx)
             line = bin_img[row_idx]
             col_idx = 0
             last_black = -1
@@ -92,8 +177,3 @@ class PageSegmentor(object):
                 
         return smeared_img
     
-    def show_bin_img(self, bin_img: ndarray, title: str = "Binarized image"):
-        
-        img = Image.fromarray(bin_img)
-        img.save("/tmp/test.png")
-        img.show(title)
