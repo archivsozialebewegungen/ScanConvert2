@@ -29,11 +29,15 @@ class PageSegmentationTest(BaseTest):
         segmentor = PageSegmentor()
         img = Image.open(self.test_file)
         segments = segmentor.find_segments(img)
+        counter = 0
         for segment in segments:
-            if segment.bounding_box.size > 100000:
-                new_img = segment.overlay_on_image(img)
-                new_img.show("Composite")
-                new_img.save("/tmp/test.tif")
+            counter += 1
+            print("Segment %d: DC = %d BC = %d TC = %d" % (counter, segment.dc, segment.bc, segment.tc))
+            assert(segment.dc <= segment.bc)
+            #if segment.bounding_box.size > 100000:
+            #    new_img = segment.overlay_on_image(img)
+            #    new_img.show("Composite")
+            #    new_img.save("/tmp/test.tif")
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

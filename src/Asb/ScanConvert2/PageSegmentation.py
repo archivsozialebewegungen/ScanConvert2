@@ -39,19 +39,23 @@ class BoundingBox(object):
         self.height = height
         
     size = property(lambda self: self.width * self.height)
+    eccentricity = property(lambda self: self.width / self.height)
 
 class Segment(object):
     
-    def __init__(self, label, stats, label_matrix):
+    def __init__(self, label, stats, label_matrix, binary_img):
         
         self.label_matrix = label_matrix
+        self.binary_img = binary_img
         self.label = label
         self.stats = stats
-        self._mask = None
         self.bounding_box = BoundingBox(self.stats[cv2.CC_STAT_LEFT],
                                         self.stats[cv2.CC_STAT_TOP],
                                         self.stats[cv2.CC_STAT_WIDTH],
                                         self.stats[cv2.CC_STAT_HEIGHT])
+        self._mask = None
+        self._dc = None
+        self._tc = None
         
     def _get_mask(self):
         
@@ -97,8 +101,37 @@ class Segment(object):
                 
         return Image.alpha_composite(segment, background).convert(img.mode)
     
-    mask = property(_get_bb_mask)
+    def _get_dc(self):
         
+        if self._dc is not None:
+            return self._dc
+        
+        bin_copy = self.binary_img.copy()
+        bin_copy[self.label_matrix != self.label] = 0
+        return np.count_nonzero(bin_copy)
+    
+    def _get_tc(self):
+        
+        if self._tc is not None:
+            return self._tc
+        
+        self._tc = 0
+        for row_idx in range(self.bounding_box.y, self.bounding_box.y + self.bounding_box.height):
+            current_color = WHITE
+            for col_idx in range(self.bounding_box.y, self.bounding_box.y + self.bounding_box.height):
+                if current_color != self.binary_img[row_idx, col_idx]:
+                    self._tc += 1
+                    current_color = self.binary_img[row_idx, col_idx]
+        return self._tc
+    
+    mask = property(_get_bb_mask)
+    bc = property(lambda self: self.stats[cv2.CC_STAT_AREA])
+    dc = property(_get_dc)
+    tc = property(_get_tc)
+    h = property(lambda self: self.bounding_box.height)
+    e = property(lambda self: self.bounding_box.eccentricity)
+    s = property(lambda self: self.bc / self.bounding_box.size)
+    r = property(lambda self: self.dc / self.tc)
         
 
 
@@ -132,7 +165,7 @@ class PageSegmentor(object):
         no_of_components, label_matrix, stats, centroids = cv2.connectedComponentsWithStats(smeared_gray_img, connectivity)
         segments = []
         for label in range(1, no_of_components):
-            segments.append(Segment(label, stats[label], label_matrix))
+            segments.append(Segment(label, stats[label], label_matrix, binary_img))
         return segments
     
     def smear_image(self, binary_img: Image) -> Image:
