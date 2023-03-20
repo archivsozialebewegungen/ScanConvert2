@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QMainWindow, \
     QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox, \
     QButtonGroup, QRadioButton, QCheckBox
-from injector import inject, Injector, singleton
+from injector import inject, Injector, singleton, Module, provider, BoundKey
 
 from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
 from Asb.ScanConvert2.PictureDetector import PictureDetector
@@ -31,12 +31,14 @@ from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
 from networkx.algorithms.bipartite.projection import project
 from Asb.ScanConvert2.GUI.PageView import PageView
+from Asb.ScanConvert2.PageSegmentation import WahlWongCaseySegmentationService
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
 
+PhotoDetector = BoundKey("photo detector")
 
 @singleton
 class FehPreviewer(object):
@@ -71,7 +73,7 @@ class PhotoDetectionThread(QThread):
     def run(self):
         
         current_page = self.project.current_page
-        photo_bboxes = self.photo_detector.find_pictures(current_page.get_raw_image(self.project.project_properties.pdf_resolution))
+        photo_bboxes = self.photo_detector.find_photos(current_page.get_raw_image(self.project.project_properties.pdf_resolution))
         if len(photo_bboxes) == 0:
             return
         
@@ -91,7 +93,7 @@ class Window(QMainWindow):
                  project_service: ProjectService,
                  task_manager: TaskManager,
                  previewer: FehPreviewer,
-                 photo_detector: PictureDetector):
+                 photo_detector: WahlWongCaseySegmentationService):
 
         super().__init__()
         
@@ -336,6 +338,10 @@ class Window(QMainWindow):
         edit_properties_action.setShortcut('Ctrl+E')
         edit_properties_action.setStatusTip('Projekteinstellungen bearbeiten')
         edit_properties_action.triggered.connect(self.cb_edit_properties)
+        edit_properties_action = QAction(QIcon('file.png'), 'P&otos erkennen', self)
+        edit_properties_action.setShortcut('Ctrl+E')
+        edit_properties_action.setStatusTip('Alle Photos im Projekt erkennen und als Regionen markieren')
+        edit_properties_action.triggered.connect(self.cb_detect_photos)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
@@ -363,6 +369,17 @@ class Window(QMainWindow):
         self.properties_dialog.project_properties = self.project.project_properties
         if self.properties_dialog.exec():
             self.project.project_properties = self.properties_dialog.project_properties
+            
+    def cb_detect_photos(self):
+        
+        if self.project is None:
+            return
+        counter = 0
+        for page in self.project.pages:
+            counter += 1
+            print("Seite %d" % counter)
+            self.run_photo_detection(page)
+            
 
     def cb_preview_current_page(self):
         
@@ -565,15 +582,13 @@ class Window(QMainWindow):
 
     def run_photo_detection(self, page: Page):
 
-        photo_bboxes = self.photo_detector.find_pictures(page.get_raw_image())
-        if len(photo_bboxes) == 0:
+        regions = self.photo_detector.find_photos(page.get_raw_image())
+        if len(regions) == 0:
             return
         
-        for bbox in photo_bboxes:
-            page.add_region(Region(bbox[0], bbox[1],
-                                           bbox[2] - bbox[0], bbox[3] - bbox[1],
-                                           Algorithm.FLOYD_STEINBERG))
-        page.current_sub_region_no = page.no_of_sub_regions
+        for region in regions:
+            region.mode_algorithm = Algorithm.FLOYD_STEINBERG
+            page.add_region(region)
         if page == self.current_page:
             self.show_page()
     
@@ -653,7 +668,14 @@ class Window(QMainWindow):
         self.show_page()
         
     current_page = property(lambda self: self.project.current_page)
+
+class ConfigurationModule(Module):
+    
+    @provider
+    @singleton
+    def photo_detector_provider(self) -> PhotoDetector:
         
+        return WahlWongCaseySegmentationService()
             
 if __name__ == '__main__':
     

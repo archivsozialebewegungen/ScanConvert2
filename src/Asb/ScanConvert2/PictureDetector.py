@@ -26,7 +26,7 @@ class PictureDetector(object):
         
         self.re_boundingbox = re.compile(r'bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+).*')
 
-    def find_pictures(self, img: Image) -> Image:
+    def find_photos(self, img: Image) -> Image:
         
         img = self._convert_to_bw(img)
         # should improve segmentation
