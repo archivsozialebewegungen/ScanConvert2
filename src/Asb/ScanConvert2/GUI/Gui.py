@@ -8,37 +8,34 @@ import shutil
 import sys
 import tempfile
 
-from PIL import Image
-from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QRect, QSize, QRectF, Qt, QPoint, QThread
-from PySide6.QtGui import QPixmap, QAction, QIcon
-from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
+from PySide6.QtCore import Qt, QThread
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox, \
+    QWidget, QApplication, QComboBox, QFileDialog, QGroupBox, \
     QButtonGroup, QRadioButton, QCheckBox
-from injector import inject, Injector, singleton, Module, provider, BoundKey
+from injector import inject, Injector, singleton
+from networkx.algorithms.bipartite.projection import project
 
 from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
+from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
+from Asb.ScanConvert2.GUI.PageView import PageView
+from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
+from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
+from Asb.ScanConvert2.PageSegmentation import SegmentationService
 from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region, Page, NoPagesInProjectException, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
-from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
-from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
-from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
-from networkx.algorithms.bipartite.projection import project
-from Asb.ScanConvert2.GUI.PageView import PageView
-from Asb.ScanConvert2.PageSegmentation import WahlWongCaseySegmentationService
+
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
-
-PhotoDetector = BoundKey("photo detector")
 
 @singleton
 class FehPreviewer(object):
@@ -93,7 +90,7 @@ class Window(QMainWindow):
                  project_service: ProjectService,
                  task_manager: TaskManager,
                  previewer: FehPreviewer,
-                 photo_detector: WahlWongCaseySegmentationService):
+                 photo_detector: SegmentationService):
 
         super().__init__()
         
@@ -669,13 +666,6 @@ class Window(QMainWindow):
         
     current_page = property(lambda self: self.project.current_page)
 
-class ConfigurationModule(Module):
-    
-    @provider
-    @singleton
-    def photo_detector_provider(self) -> PhotoDetector:
-        
-        return WahlWongCaseySegmentationService()
             
 if __name__ == '__main__':
     
