@@ -109,7 +109,7 @@ class WahlWongCaseySegmentationService(object):
     def _find_segments(self, segmented_page: WahlWongCaseySegmentedPage) -> SegmentedPage:
         
         smeared_gray_ndarray = self.ndarray_service.convert_binary_to_inverted_gray(segmented_page.smeared_binary_ndarray)
-        connectivity = 4
+        connectivity = 8
         no_of_components, label_matrix, stats, centroids = cv2.connectedComponentsWithStats(smeared_gray_ndarray, connectivity)
         for label in range(1, no_of_components):
             segment = WahlWongCaseySegment(label, label_matrix, stats[label])
@@ -226,7 +226,7 @@ class WahlWongCaseySegmentationService(object):
         
         for segment in segmented_page.segments:
             
-            segment.type = SegmentType.BORDER
+            segment.segment_type = SegmentType.BORDER
             
             if segment.bw_ratio < 0.1:
                 # Just a black border frame with lot of white inside
@@ -235,13 +235,13 @@ class WahlWongCaseySegmentationService(object):
             if segment.height <= 3 * segmented_page.mean_height:
                 if segment.transition_ratio <= 3 * segmented_page.mean_transition_ratio:
                     # Text
-                    segment.type = SegmentType.TEXT
+                    segment.segment_type = SegmentType.TEXT
             else:
                 if segment.eccentricity > 1 / 5:
                     # Picture
                     if segment.bw_ratio > 0.5:
-                        segment.type = SegmentType.PHOTO
+                        segment.segment_type = SegmentType.PHOTO
                     else:
-                        segment.type = SegmentType.DRAWING
+                        segment.segment_type = SegmentType.DRAWING
 
         return segmented_page

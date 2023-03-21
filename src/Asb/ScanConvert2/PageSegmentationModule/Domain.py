@@ -7,8 +7,6 @@ from enum import Enum
 
 from PIL import Image
 
-import numpy as np
-
 BINARY_BLACK = False
 BINARY_WHITE = True
 GRAY_BLACK = 0
@@ -59,7 +57,7 @@ class SegmentedPage(object):
         type_segments = []
         for segment in self.segments:
             if segment.segment_type == segment_type:
-                type_segments. append(segment)
+                type_segments.append(segment)
         return type_segments
     
     def add_segment(self, segment: Segment):

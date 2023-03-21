@@ -8,34 +8,43 @@ import unittest
 
 from PIL import Image
 
-from Asb.ScanConvert2.PageSegmentation import WahlWongCaseySegmentationService
 from Base import BaseTest
-
+from parameterized import parameterized
+from Asb.ScanConvert2.PageSegmentationModule.WahlWongCaseySegmentation import WahlWongCaseySegmentationService
+from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
+    BinarizationService, NdArrayService, ImageStatisticsService
+from Asb.ScanConvert2.PageSegmentationModule.Domain import BoundingBox
 
 class PageSegmentationTest(BaseTest):
 
-
-    def setUp(self):
+    @parameterized.expand([
+        ["1982_original.tif", 2, BoundingBox(1071,175,1825,665)],
+        ["Margaretha_I_025.jpg", 1, BoundingBox(267,624,1260,1903)],
+        ["Margaretha_I_192.jpg", 1, BoundingBox(295,494,1497,941)],
+        ["picture_detection_simple.tif", 1, BoundingBox(816,800,1537,1880)],
+        #["picture_detection.tif", 1, BoundingBox(0,0,0,0)],
+    ])
+    def test_segmentation(self, filename, no_of_pictures, bounding_box):
         
-        super().setUp()
-        
-        self.test_file = os.path.join(self.test_file_dir, "PictureDetection", "Margaretha_I_025.jpg")
+        self.test_file = os.path.join(self.test_file_dir, "PictureDetection", filename)
 
 
-    def testSegmentation(self):
-        
-        segmentor = WahlWongCaseySegmentationService()
+        segmentation_service = WahlWongCaseySegmentationService(SmearingService(), BinarizationService(), NdArrayService(), ImageStatisticsService())
         img = Image.open(self.test_file)
-        segments = segmentor.find_photo_segments(img)
-        self.assertEqual(1, len(segments))
-        bw_img = Image.fromarray(segmentor.binarize(img.convert("L")))
-        for segment in segments:
-            seg_img = img.crop((segment.bounding_box.x, segment.bounding_box.y, segment.bounding_box.x2, segment.bounding_box.y2))
-            seg_img = seg_img.convert("L")
-            bw_img.paste(seg_img, (segment.bounding_box.x, segment.bounding_box.y))
-            
-        bw_img.show("Composite")
-        bw_img.save("/tmp/test.tif")
+        segmented_page = segmentation_service.get_segmented_page(img)
+        photo_segments = segmented_page.photo_segments
+        self.assertEqual(no_of_pictures, len(segmented_page.photo_segments))
+        self.assertBoundingBoxesEqualApproximately(photo_segments[0].bounding_box, bounding_box)
+    
+    def assertValuesEqualApproximately(self, v1, v2):
+        
+        self.assertTrue(abs(v1/v2 - 1) < 0.01)
+        
+    def assertBoundingBoxesEqualApproximately(self, bb1, bb2):
+        
+        self.assertValuesEqualApproximately(bb1.width, bb2.width)
+        self.assertValuesEqualApproximately(bb1.height, bb2.height)
+        
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']
