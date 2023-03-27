@@ -24,14 +24,13 @@ class WahlWongCaseySegment(Segment):
         
         super().__init__(BoundingBox(stats[cv2.CC_STAT_LEFT],
                                      stats[cv2.CC_STAT_TOP],
-                                     stats[cv2.CC_STAT_LEFT] + stats[cv2.CC_STAT_WIDTH],
-                                     stats[cv2.CC_STAT_TOP] + stats[cv2.CC_STAT_HEIGHT]
+                                     stats[cv2.CC_STAT_LEFT] + stats[cv2.CC_STAT_WIDTH] - 1,
+                                     stats[cv2.CC_STAT_TOP] + stats[cv2.CC_STAT_HEIGHT] - 1
                                      ))
         self.label = label
         self.label_matrix = label_matrix
         self.stats = stats
         self.black_count = stats[cv2.CC_STAT_AREA]
-        self.height = self.bounding_box.height
         self.eccentricity = self.bounding_box.eccentricity
         self.shape = self.black_count / self.bounding_box.size
 
@@ -96,8 +95,12 @@ class WahlWongCaseySegmentationService(object):
         
     def get_segmented_page(self, img: Image):
 
+        # For this algorithm, otsu is the only meaningful way for
+        # binarization (at least for a default)
         binary_ndarray = self.binarization_service.binarize_otsu(img)
+        
         smeared_binary_ndarray = self._smear_image(binary_ndarray)
+        
         segmented_page = WahlWongCaseySegmentedPage(img, binary_ndarray, smeared_binary_ndarray)
         segmented_page = self._find_segments(segmented_page)
         segmented_page = self._calculate_page_statistics(segmented_page)

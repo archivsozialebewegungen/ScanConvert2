@@ -40,6 +40,10 @@ class NdArrayService(object):
 
 class BinarizationService(object):
 
+    def binarize_floyd_steinberg(self, img: Image) -> ndarray:
+        
+        return np.asarray(img.convert("1"))
+    
     def binarize_otsu(self, img: Image) -> ndarray:
         
         gray_img = img.convert("L")
@@ -66,12 +70,12 @@ class SmearingService(object):
     Implementation of a constrained run length algorithm (CRLA)
     """
     
-    def smear_vertical(self, bin_img: ndarray, constraint: int):
+    def smear_vertical(self, bin_img: ndarray, constraint: int, boundary_color = BINARY_BLACK):
         
-        smeared_img = self.smear_horizontal(np.rot90(bin_img, -1), constraint)
+        smeared_img = self.smear_horizontal(np.rot90(bin_img, -1), constraint, boundary_color)
         return np.rot90(smeared_img)
 
-    def smear_horizontal(self, bin_img: ndarray, constraint: int):
+    def smear_horizontal(self, bin_img: ndarray, constraint: int, boundary_color = BINARY_BLACK):
         
         height = bin_img.shape[0]
         width = bin_img.shape[1]
@@ -79,13 +83,13 @@ class SmearingService(object):
         for row_idx in range(0, height):
             line = bin_img[row_idx]
             col_idx = 0
-            last_black = -1
+            last_boundary = -1
             while col_idx < width:
-                if line[col_idx] == BINARY_BLACK:
-                    whites = col_idx - last_black
-                    if whites > 0 and whites < constraint:
-                        smeared_img[row_idx, last_black +1:col_idx] = BINARY_BLACK
-                    last_black = col_idx
+                if line[col_idx] == boundary_color:
+                    gap_size = col_idx - last_boundary
+                    if gap_size > 0 and gap_size < constraint:
+                        smeared_img[row_idx, last_boundary+1:col_idx] = boundary_color
+                    last_boundary = col_idx
                 col_idx += 1
                 
         return smeared_img
