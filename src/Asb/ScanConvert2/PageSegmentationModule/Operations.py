@@ -83,13 +83,18 @@ class SmearingService(object):
         for row_idx in range(0, height):
             line = bin_img[row_idx]
             col_idx = 0
-            last_boundary = -1
+            gap_size = None
             while col_idx < width:
                 if line[col_idx] == boundary_color:
-                    gap_size = col_idx - last_boundary
-                    if gap_size > 0 and gap_size < constraint:
-                        smeared_img[row_idx, last_boundary+1:col_idx] = boundary_color
-                    last_boundary = col_idx
+                    if gap_size is not None and gap_size > 0:
+                        if gap_size < constraint:
+                            gap_start = col_idx - gap_size
+                            smeared_img[row_idx, gap_start:col_idx] = boundary_color
+                    gap_size = 0
+                else:
+                    if gap_size is not None:
+                        gap_size += 1
+                    
                 col_idx += 1
                 
         return smeared_img
