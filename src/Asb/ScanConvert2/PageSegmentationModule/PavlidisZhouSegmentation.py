@@ -6,7 +6,7 @@ Created on 22.03.2023
 from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
     BinarizationService
 from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage,\
-    BINARY_BLACK, Segment, BoundingBox, BINARY_WHITE
+    BINARY_BLACK, Segment, BoundingBox
 from injector import inject
 from PIL import Image
 
@@ -24,17 +24,17 @@ class ColumnInterval(Segment):
     
     def can_be_merged(self, other, epsilon_1 = 3, epsilon_2 = 3, epsilon_3 = 0.98):
 
-        if not self.bounding_box._is_vertically_near(other.bounding_box, epsilon_1):
+        if not self.bounding_box.is_vertically_near(other.bounding_box, epsilon_1):
             return False
         
-        if not self.bounding_box._is_horizontally_contained_in(other.bounding_box, epsilon_2):
-            if not other.bounding_box._is_horizontally_contained_in(self.bounding_box, epsilon_2):
+        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, epsilon_2):
+            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, epsilon_2):
                 return False
         
         if epsilon_3 == None:
             return True
 
-        if self.bounding_box._has_nearly_the_same_width(other.bounding_box, epsilon_3):
+        if self.bounding_box.has_nearly_the_same_width(other.bounding_box, epsilon_3):
             return True
         
         return False        
@@ -60,15 +60,11 @@ class ColumnInterval(Segment):
         
     def __str__(self):
         
-        return "%" % self.bounding_box
+        return "%s" % self.bounding_box
     
 
 class PavlidisZhouSegmentationService(object):
     '''
-    Glossary:
-    
-    horizontal| vertical projection profile
-      The sum of black pixels in a row or column
     '''
 
     @inject
@@ -87,9 +83,7 @@ class PavlidisZhouSegmentationService(object):
         # Remove white space between characters
         smeared_ndarray = self.smearing_service.smear_horizontal(binary_ndarray, 35)
         # Remove black noise in column gaps
-        smeared_ndarray = self.smearing_service.smear_vertical(smeared_ndarray, 5, BINARY_WHITE)
-        Image.fromarray(smeared_ndarray).show()
-        #Image.fromarray(smeared_ndarray).show()
+        #smeared_ndarray = self.smearing_service.smear_vertical(smeared_ndarray, 5, BINARY_WHITE)
         print("Start segmentation")
         segmented_page = self._assemble_segment_matrix(smeared_ndarray, SegmentedPage(img))
         print("End Segmentation")
@@ -128,48 +122,53 @@ class PavlidisZhouSegmentationService(object):
                     if not is_merged:
                         segmented_page.segments.append(new_column_interval)
                         this_row_segments.append(new_column_interval)
-        segmented_page.show_segments()
+
         segmented_page.segments = self._merge_small_intervals(segmented_page.segments)
-        segmented_page.show_segments()
                     
         return segmented_page
     
     def _merge_small_intervals(self, column_interval_list):
-        
-        initial_list_size = len(column_interval_list)
-        print("Initialial list size: %d" % initial_list_size)
-        merge_operations = 0
-        
-        final_column_interval_list = []
-        merge_candidates = column_interval_list.copy()
+        '''
+        Tries to merge as much small intervals as possible into
+        large intervals
+        '''
+        # Splitting into small and large column
+        small_column_intervals = []
+        large_column_intervals = []
         for column_interval in column_interval_list:
             # The paper does not state what "small" width or height means
-            if column_interval.height > 10 or column_interval.width > 40:
-                final_column_interval_list.append(column_interval)
-                continue
-            is_merged = False
-            for merge_interval in merge_candidates:
-                if merge_interval == column_interval:
-                    continue
-                if merge_interval.can_be_merged(column_interval, 20, 5, None):
-                    merge_operations += 1
-                    merge_interval.merge(column_interval)
-                    is_merged = True
-                    break
-            if not is_merged:
-                final_column_interval_list.append(column_interval)
+            if column_interval.height > 30 or column_interval.width > 15:
+                large_column_intervals.append(column_interval)
+            else:
+                small_column_intervals.append(column_interval)
         
-        final_list_size = len(final_column_interval_list)
-        print("Final list size: %d" % final_list_size)
-        print("Merges: %d" % merge_operations)
-        assert(final_list_size + merge_operations == initial_list_size)
-        return final_column_interval_list
-    
-    def _is_segment_start(self, row_idx, start, end, segment_matrix):
+        # We need at least one parent interval
+        if len(large_column_intervals) == 0:
+            large_column_intervals.append(small_column_intervals.pop())
+            
+        large_column_intervals.sort(key=lambda interval: interval.size, reverse=True)
         
-        if row_idx == 0:
-            return True
-        
-        upper_row = segment_matrix[row_idx - 1]
-        current_row = segment_matrix[row_idx]
+        found_something_to_merge = True
+        while len(small_column_intervals) > 0 and found_something_to_merge:
+            found_something_to_merge = False
+            # We can't remove while looping over the list
+            # so we just not, which small intervals are already
+            # merged
+            for parent_interval in large_column_intervals:
+                merged_list = []
+                for s_idx in range(0, len(small_column_intervals)):
+                    if s_idx in merged_list:
+                        continue
+                    if parent_interval.can_be_merged(small_column_intervals[s_idx], 20, 5, None):
+                        parent_interval.merge(small_column_intervals[s_idx])
+                        merged_list.append(s_idx)
+                        found_something_to_merge = True
+            
+                merged_list.sort(reverse=True)
+                for s_idx in merged_list:
+                    del small_column_intervals[s_idx]
+
+        final_list = large_column_intervals + small_column_intervals
+        final_list.sort()
+        return final_list
         

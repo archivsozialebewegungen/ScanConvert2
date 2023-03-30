@@ -32,22 +32,64 @@ class BoundingBox(object):
         self.x2 = x2
         self.y2 = y2
 
-    def _is_vertically_near(self, other, tolerance):
+    def is_vertically_near(self, other, tolerance):
 
-        if self.y2 > other.y1:
-            return self.y2 - other.y1 < tolerance
+        upper_self = self.y1
+        lower_self = self.y2
+        upper_other = other.y1
+        lower_other = other.y2
+        
+        return abs(lower_self-upper_other) < tolerance or abs(lower_other-upper_self) < tolerance
  
-        return other.y2 - self.y1 < tolerance
+        return False
     
-    def _is_horizontally_contained_in(self, other, tolerance):
+    def is_horizontally_contained_in(self, other, tolerance):
         
         return other.x1 - tolerance < self.x1 and other.x2 + tolerance > self.x1
     
-    def _has_nearly_the_same_width(self, other, coefficient):
+    def has_nearly_the_same_width(self, other, coefficient):
         
         minimum = np.min([self.width, other.width])
         maximum = np.max([self.width, other.width])
         return minimum / maximum >= coefficient
+
+    def overlaps_with(self, other):
+        
+        if self.point_within_self(other.x1, other.y1):
+            return True
+        if self.point_within_self(other.x1, other.y2):
+            return True
+        if self.point_within_self(other.x2, other.y1):
+            return True
+        if self.point_within_self(other.x2, other.y2):
+            return True
+        return False
+    
+    def is_contained_within_self(self, other):
+        
+        if not self.point_within_self(other.x1, other.y1):
+            return False
+        if not self.point_within_self(other.x2, other.y2):
+            return False
+        
+        return True
+        
+
+    def point_within_self(self, x, y):
+        
+        return x >= self.x1 and x <= self.x2 and y >= self.y1 and y <= self.y2
+    
+    def merge(self, other):
+        
+        if other.x1 > self.x1:
+            self.x1 = other.x1
+        if other.x2 < self.x2:
+            self.x2 = other.x2
+        if other.y1 > self.y1:
+            self.y1 = other.y1
+        if other.y2 < self.y2:
+            self.y2 = other.y2
+
 
     def __str__(self):
         

@@ -38,7 +38,7 @@ class SegmentationService(object):
         segmented_page = self.implementation.get_segmented_page(img)
         regions = []
         for segment in segmented_page.segments:
-            if segment.type == SegmentType.PHOTO:
+            if segment.segment_type == SegmentType.PHOTO:
                 regions.append(Region(segment.bounding_box.x1,
                                       segment.bounding_box.y1,
                                       segment.bounding_box.width,

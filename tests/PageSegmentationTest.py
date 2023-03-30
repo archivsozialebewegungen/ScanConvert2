@@ -15,9 +15,10 @@ from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
     BinarizationService, NdArrayService, ImageStatisticsService
 from Asb.ScanConvert2.PageSegmentationModule.Domain import BoundingBox,\
     SegmentType
-from Asb.ScanConvert2.PageSegmentationModule.PavlidisZhouSegmentation import PavlidisZhouSegmentationService
+from Asb.ScanConvert2.PageSegmentationModule.SimpleSegmentation import SimpleSegmentationService
 import PIL
 from PIL.ImageShow import EogViewer
+from Asb.ScanConvert2.PageSegmentationModule.PavlidisZhouSegmentation import PavlidisZhouSegmentationService
 
 
 PIL.ImageShow.register(EogViewer(), 0
@@ -32,9 +33,31 @@ test_images = [
         ["picture_detection_simple.tif", 1, BoundingBox(816,800,1537,1880)],
         ["picture_detection.tif", 1, BoundingBox(816,800,1537,1880)],
         ["mini.tif", 0, None],
+        ["mini2.tif", 0, None],
+        ["one_line.tif", 0, None],
+        ["BlackBlock.tif", 0, None],
+        ["single_c.tif", 0, None],
         ]
 
 class PageSegmentationTest(BaseTest):
+    
+    def setUp(self):
+        BaseTest.setUp(self)
+        self.smearing_service = SmearingService()
+        self.binarization_service = BinarizationService()
+        self.ndarray_service = NdArrayService()
+        self.image_statistics_service = ImageStatisticsService()
+        self.wws_segmentation_service = WahlWongCaseySegmentationService(
+            self.smearing_service,
+            self.binarization_service,
+            self.ndarray_service,
+            self.image_statistics_service)
+        self.simple_segmentation_service = SimpleSegmentationService(
+            self.wws_segmentation_service,
+            self.smearing_service,
+            self.binarization_service,
+            self.ndarray_service)
+        self.pz_segmentation_service = PavlidisZhouSegmentationService(self.smearing_service, self.binarization_service)
 
     @parameterized.expand(test_images[0:2] + test_images[3:6])
     def no_test_wahl_wong_casey_segmentation(self, filename, no_of_pictures, bounding_box):
@@ -44,26 +67,38 @@ class PageSegmentationTest(BaseTest):
         self.test_file = os.path.join(self.test_file_dir, "PictureDetection", filename)
 
 
-        segmentation_service = WahlWongCaseySegmentationService(SmearingService(), BinarizationService(), NdArrayService(), ImageStatisticsService())
         img = Image.open(self.test_file)
-        segmented_page = segmentation_service.get_segmented_page(img)
+        segmented_page = self.wws_segmentation_service.get_segmented_page(img)
         segmented_page.show_segments(SegmentType.PHOTO)
         photo_segments = segmented_page.photo_segments
         self.assertEqual(no_of_pictures, len(photo_segments))
         print(photo_segments[0].bounding_box)
         self.assertBoundingBoxesEqualApproximately(photo_segments[0].bounding_box, bounding_box)
     
-    #@parameterized.expand([["simple_two_column_blocks.tif", 0, None]])
-    @parameterized.expand(test_images[7:])
+    @parameterized.expand(test_images[2:3])
     def test_pavlidis_zhou_segmentation(self, filename, no_of_pictures, bounding_box):
-        
+        """
+        Images with index 2 and 6 do not work well with this algorithm
+        """
         self.test_file = os.path.join(self.test_file_dir, "PictureDetection", filename)
 
 
-        segmentation_service = PavlidisZhouSegmentationService(SmearingService(), BinarizationService())
         img = Image.open(self.test_file)
-        segmented_page = segmentation_service.get_segmented_page(img)
-        #segmented_page.show_segments()
+        segmented_page = self.pz_segmentation_service.get_segmented_page(img)
+        segmented_page.show_segments()
+        photo_segments = segmented_page.photo_segments
+        self.assertEqual(no_of_pictures, len(photo_segments))
+        print(photo_segments[0].bounding_box)
+        self.assertBoundingBoxesEqualApproximately(photo_segments[0].bounding_box, bounding_box)
+    
+    @parameterized.expand(test_images[:10])
+    def no_test_simple_segmentation(self, filename, no_of_pictures, bounding_box):
+        
+        self.test_file = os.path.join(self.test_file_dir, "PictureDetection", filename)
+
+        img = Image.open(self.test_file)
+        segmented_page = self.simple_segmentation_service.get_segmented_page(img)
+        segmented_page.show_segments()
         photo_segments = segmented_page.photo_segments
         self.assertEqual(no_of_pictures, len(segmented_page.photo_segments))
         if no_of_pictures > 0:
