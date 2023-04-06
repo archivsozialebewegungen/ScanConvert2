@@ -5,7 +5,7 @@ Created on 16.01.2023
 '''
 import unittest
 from Asb.ScanConvert2.Algorithms import AlgorithmModule, Algorithm,\
-    ModeTransformationAlgorithm, WHITE, AlgorithmHelper
+    ModeTransformationAlgorithm, RGB_WHITE, AlgorithmHelper
 import os
 from PIL import Image
 from _ast import Or
@@ -63,17 +63,17 @@ class AlgorithmTests(unittest.TestCase):
 
     def testNone(self):
         
-        self.result = self.algorithms[Algorithm.NONE].transform(self.img)
+        self.result = self.algorithms[Algorithm.NONE].transform(self.img, None)
         self.result[0].save(os.path.join("/", "tmp", "none.png"))
 
     def testGray(self):
         
-        self.result = self.algorithms[Algorithm.GRAY].transform(self.img)
+        self.result = self.algorithms[Algorithm.GRAY].transform(self.img, None)
         self.result[0].save(os.path.join("/", "tmp", "gray.png"))
     
     def testGrayOnWhite(self):
         
-        self.result = self.algorithms[Algorithm.GRAY_WHITE].transform(self.img)
+        self.result = self.algorithms[Algorithm.GRAY_WHITE].transform(self.img, None)
         self.result[0].save(os.path.join("/", "tmp", "gray_on_white.png"))
         
     def testGrayOnColor(self):
@@ -86,17 +86,17 @@ class AlgorithmTests(unittest.TestCase):
         file_name = os.path.join(os.path.dirname(__file__), "SampleFiles", "AlgorithmTest", "algorithm-test.pnm")            
         img = Image.open(file_name)
 
-        self.result = self.algorithms[Algorithm.OTSU].transform(img)
+        self.result = self.algorithms[Algorithm.OTSU].transform(img, None)
         self.result[0].save(os.path.join("/", "tmp", "otsu.png"))
 
     def testOtsu(self):
         
-        result = self.algorithms[Algorithm.OTSU].transform(self.img)
+        result = self.algorithms[Algorithm.OTSU].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "otsu.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
         self.assertIn((0,0,0), colors)
-        self.assertIn(WHITE, colors)
+        self.assertIn(RGB_WHITE, colors)
         
     def testOtsuWithBackground(self):
         
@@ -109,7 +109,7 @@ class AlgorithmTests(unittest.TestCase):
 
     def testSauvola(self):
         
-        result = self.algorithms[Algorithm.SAUVOLA].transform(self.img)
+        result = self.algorithms[Algorithm.SAUVOLA].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "sauvola.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
@@ -126,12 +126,12 @@ class AlgorithmTests(unittest.TestCase):
 
     def testFloydSteinberg(self):
         
-        result = self.algorithms[Algorithm.FLOYD_STEINBERG].transform(self.img)
+        result = self.algorithms[Algorithm.FLOYD_STEINBERG].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "floyd_steinberg.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
         self.assertIn((0,0,0), colors)
-        self.assertIn(WHITE, colors)
+        self.assertIn(RGB_WHITE, colors)
 
     def testFloydSteinbergWithBackground(self):
         
@@ -144,7 +144,7 @@ class AlgorithmTests(unittest.TestCase):
 
     def testBlackTextOnColor(self):
         
-        result = self.algorithms[Algorithm.COLOR_PAPER_QUANTIZATION].transform(self.img)
+        result = self.algorithms[Algorithm.COLOR_PAPER_QUANTIZATION].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "color_paper.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
@@ -162,12 +162,12 @@ class AlgorithmTests(unittest.TestCase):
 
     def testColorTextOnWhite(self):
         
-        result = self.algorithms[Algorithm.COLOR_TEXT_QUANTIZATION].transform(self.img)
+        result = self.algorithms[Algorithm.COLOR_TEXT_QUANTIZATION].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "color_text.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
         self.assertIn(ORIGINAL_FOREGROUND, colors)
-        self.assertIn(WHITE, colors)
+        self.assertIn(RGB_WHITE, colors)
 
     def testColorTextOnWhiteWithBackground(self):
         
@@ -180,7 +180,7 @@ class AlgorithmTests(unittest.TestCase):
 
     def testTwoColors(self):
         
-        result = self.algorithms[Algorithm.TWO_COLOR_QUANTIZATION].transform(self.img)
+        result = self.algorithms[Algorithm.TWO_COLOR_QUANTIZATION].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "two_colors.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 2)
@@ -200,11 +200,11 @@ class AlgorithmTests(unittest.TestCase):
 
     def testErase(self):
         
-        result = self.algorithms[Algorithm.ERASE].transform(self.img)
+        result = self.algorithms[Algorithm.ERASE].transform(self.img, None)
         result[0].save(os.path.join("/", "tmp", "white.png"))
         colors = self.get_colors(result[0])
         self.assertEqual(len(colors), 1)
-        self.assertIn(WHITE, colors)
+        self.assertIn(RGB_WHITE, colors)
         
     def testEraseWithBackground(self):
         
@@ -218,7 +218,7 @@ class AlgorithmTests(unittest.TestCase):
         
         exception_raised = False
         try:
-            ModeTransformationAlgorithm().transform(self.img)
+            ModeTransformationAlgorithm().transform(self.img, None)
         except Exception:
             exception_raised = True
         self.assertTrue(exception_raised)

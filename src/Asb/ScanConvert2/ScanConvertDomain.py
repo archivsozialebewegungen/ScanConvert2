@@ -292,6 +292,11 @@ class MetaData(object):
         self.keywords = ""
         self.reviewed = False
 
+    def as_dict(self):
+        
+        return {"title": self.title, "author": self.author, "subject": self.subject,
+                "keywords": self.keywords, "creator": 'Scan-Convert 2'}
+
 class NoPagesInProjectException(Exception):
     
     pass

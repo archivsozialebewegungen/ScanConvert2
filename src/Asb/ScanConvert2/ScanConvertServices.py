@@ -19,10 +19,11 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm,\
-    AlgorithmHelper, TooManyColors
+    AlgorithmHelper, TooManyColors, RGB_WHITE
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
+from fitz.fitz import Document
 
 
 INVISIBLE = 3
@@ -146,8 +147,10 @@ class FinishingService(object):
             img = self._change_resolution(img, target_source_ratio)
         
         bg_img = img.convert("RGB")
-        bg_img, bg_color = self.algorithm_implementations[page.main_region.mode_algorithm].transform(bg_img)
-        bg_img, bg_color, bg_colors = self._substitute_bg_color(bg_img, bg_color, bg_colors)
+        bg_img, bg_color = self.algorithm_implementations[page.main_region.mode_algorithm].transform(bg_img, None)
+        if bg_color is not None:
+            # We might have had a page with similar colors already
+            bg_img, bg_color, bg_colors = self._substitute_bg_color(bg_img, bg_color, bg_colors)
         final_img = self._apply_regions(page.sub_regions, bg_img, img, bg_color, target_source_ratio)
         return final_img, bg_colors
 
@@ -161,7 +164,7 @@ class FinishingService(object):
             img = self._change_resolution(img, target_source_ratio)
         
         bg_img = img.convert("RGB")
-        bg_img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(bg_img)
+        bg_img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(bg_img, None)
         return bg_img
 
     def _substitute_bg_color(self, bg_img, bg_color, bg_colors):
@@ -171,7 +174,8 @@ class FinishingService(object):
                 return bg_img, bg_color, bg_colors
             if self.algorithm_helper.colors_are_similar(color, bg_color):
                 return self.algorithm_helper.replace_color_with_color(bg_img, bg_color, color), color, bg_colors
-        bg_colors = bg_colors + [bg_color]
+        # There is a new background color that differs sufficiently from all the other background colors
+        bg_colors.append(bg_color)
         return bg_img, bg_color, bg_colors
 
     def _change_resolution(self, img: Image, target_source_ratio: float) -> Image:
@@ -201,6 +205,13 @@ class FinishingService(object):
                                round(region.x2 * target_source_ratio),
                                round(region.y2 * target_source_ratio)))
         region_img, bg_color = self._apply_algorithm(region_img, region.mode_algorithm, bg_color)
+        if final_img.mode == "1":
+            if region_img.mode in ("L", "RGB"):
+                final_img = final_img.convert(region_img.mode)
+        elif final_img.mode == "L":
+            if region_img.mode == "RGB":
+                final_img = final_img.convert(region_img.mode)
+             
         final_img.paste(region_img, (round(region.x * target_source_ratio),
                                      round(region.y * target_source_ratio),
                                      round(region.x2 * target_source_ratio),
@@ -312,7 +323,7 @@ class PdfService:
     
     def create_pdf_file(self, project: Project, filebase: str):
    
-        bg_colors = [(0,0,0)]
+        bg_colors = []
    
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = os.path.join(temp_dir, "output.pdf")
@@ -340,10 +351,10 @@ class PdfService:
                                  height_in_dots * inch / project.project_properties.pdf_resolution))
 
                 img_stream = io.BytesIO()
-                if image.mode == "1":
-                    image.save(img_stream, format='png')
-                else:
-                    image.save(img_stream, format='jpeg', quality=65, optimize=True)
+                #if image.mode == "1":
+                image.save(img_stream, format='png')
+                #else:
+                #image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
                 img_stream.seek(0)
                 img_reader = ImageReader(img_stream)
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
@@ -355,7 +366,11 @@ class PdfService:
             # Convert to pdfa and optimize graphics
             if project.project_properties.create_pdfa:
                 #ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
-                ocrmypdf.ocr(temp_file, self._get_file_name(filebase), skip_text=True)
+                ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
+                ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
+                document = Document(ocrmypdf_temp_file)
+                document.set_metadata(project.metadata.as_dict())
+                document.save(self._get_file_name(filebase))
             else:
                 shutil.copy(temp_file, self._get_file_name(filebase))
         
