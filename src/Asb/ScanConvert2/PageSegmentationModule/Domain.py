@@ -61,7 +61,7 @@ class BoundingBox(object):
         maximum = np.max([self.width, other.width])
         return minimum / maximum >= coefficient
 
-    def overlaps_with(self, other):
+    def intersects_with(self, other):
         
         if self.point_within_self(other.x1, other.y1):
             return True
@@ -408,7 +408,7 @@ class SegmentedPage(object):
         for column in columns:
             column_merged = False
             for merge_column in merged_columns:
-                if merge_column.bounding_box.overlaps_with(column.bounding_box):
+                if merge_column.bounding_box.intersects_with(column.bounding_box):
                     for segment in column._segments:
                         merge_column.add_segment(segment)
                     column_merged = True

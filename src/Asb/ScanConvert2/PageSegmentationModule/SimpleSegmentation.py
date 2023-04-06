@@ -6,38 +6,55 @@ Created on 22.03.2023
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService, NdArrayService
 from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
-    BINARY_BLACK, Segment, BoundingBox, BINARY_WHITE
+    BINARY_BLACK, Segment, BoundingBox, BINARY_WHITE, SegmentType, GRAY_WHITE
 from injector import inject
 from PIL import Image
 import numpy as np
 import cv2
 import math
 from Asb.ScanConvert2.PageSegmentationModule.WahlWongCaseySegmentation import WahlWongCaseySegmentationService
+from numpy.array_api._dtypes import uint8
+from Asb.ScanConvert2.Algorithms import RGB_WHITE
 
 
 class SimpleSegment(Segment):
     
-    @classmethod
-    def create_from_rectangle(cls, rectangle):
+    
+    def __init__(self, segment_id, contour, hierarchy, segment_type=SegmentType.UNKNOWN):
         
-        points = cv2.boxPoints(rectangle)
-        min_x = max_x = points[0][0]
-        min_y = max_y = points[0][1]
-        for point in points[1:]:
-            if point[0] < min_x:
-                min_x = point[0]
-            if point[0] > max_x:
-                max_x = point[0]
-            if point[1] < min_y:
-                min_y = point[1]
-            if point[1] > max_y:
-                max_y = point[1]
+        super().__init__(BoundingBox.create_from_rectangle(cv2.boundingRect(contour)))
+        self.segment_id = segment_id
+        self.all_segments = []
+        self.contours = [contour]
+        self.next_id = hierarchy[0]
+        if self.next_id < 0:
+            self.next_id = None
+        self.previous_id = hierarchy[1]
+        if self.previous_id < 0:
+            self.previous_id = None
+        self.child_id = hierarchy[2]
+        if self.child_id < 0:
+            self.child_id = None
+        self.parent_id = hierarchy[3]
+        if self.parent_id < 0:
+            self.parent_id = None
+        
+        self.hierarchy = hierarchy
+        
+    def find_children(self, segment_id=None, children=[]):
+        
+        if segment_id is None:
+            segment_id = self.segment_id
+        for segment in self.all_segments:
+            if segment_id == segment.parent_id:
+                children.append(segment)
+                children = self.find_children(segment.segment_id, children)
                 
-        return SimpleSegment(BoundingBox(min_x, min_y, max_x, max_y))
+        return children
     
     def can_be_merged_conservatively(self, other):
 
-        if self.bounding_box.overlaps_with(other.bounding_box):
+        if self.bounding_box.intersects_with(other.bounding_box):
             return True
         
         if not self.bounding_box.is_vertically_near(other.bounding_box, 6):
@@ -54,7 +71,7 @@ class SimpleSegment(Segment):
     
     def can_be_merged_boldly(self, other):
 
-        if self.bounding_box.overlaps_with(other.bounding_box):
+        if self.bounding_box.intersects_with(other.bounding_box):
             return True
         
         if not self.bounding_box.is_vertically_near(other.bounding_box, 8):
@@ -79,11 +96,44 @@ class SimpleSegment(Segment):
             
         if other.bounding_box.y2 > self.bounding_box.y2:
             self.bounding_box.y2 = other.bounding_box.y2
+            
+        self.contours += other.contours
         
     def __str__(self):
         
-        return "%s" % self.bounding_box
+        return "%s ID: %s Parent-ID: %s" % (self.bounding_box, self.segment_id, self.parent_id)
 
+class ContourClassificationService(object):
+    
+    def __init__(self, run_length_algorithm_service: RunLengthAlgorithmService()):
+        
+        self.run_length_algorithm_service = run_length_algorithm_service
+        
+    def classify_segment(self, img, segment):
+        
+        img = img.convert("L")
+        img_ndarray = np.array(img)
+        mask = self._get_segment_mask(segment, img_ndarray.shape)
+        
+        img_ndarray[mask > 0] = GRAY_WHITE
+        
+        img = Image.fromarray(img_ndarray)
+        img.show()
+        
+        return SegmentType.UNKNOWN
+    
+    def _get_segment_mask(self, segment, shape):
+
+        drawing_ndarray = np.zeros(shape, dtype=uint8)
+        cv2.drawContours(drawing_ndarray, segment.contours, 0, 255, cv2.FILLED)
+        img = Image.fromarray(drawing_ndarray)
+        img.show()
+        child_segments = segment.find_children()
+        for child_segment in child_segments:
+            cv2.drawContours(drawing_ndarray, child_segment.contours, -1, 0, cv2.FILLED)
+            
+        return drawing_ndarray
+            
 
 class SimpleSegmentationService(object):
     '''
@@ -146,7 +196,7 @@ class SimpleSegmentationService(object):
             
             is_merged = False
             for parent in merged_segments:
-                if parent.bounding_box.is_contained_within_self(child.bounding_box):
+                if parent_id.bounding_box.is_contained_within_self(child.bounding_box):
                     is_merged = True
                     break
                 if parent.can_be_merged_conservatively(child):

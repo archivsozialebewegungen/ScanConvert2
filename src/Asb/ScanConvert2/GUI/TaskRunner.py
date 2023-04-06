@@ -36,7 +36,7 @@ class JobDefinition():
                  pre_job_method=None,
                  post_job_method=None):
         
-        self.parent = parent
+        self.parent_id = parent
         self.job_method = job_method
         self.pre_job_method = pre_job_method
         self.post_job_method = post_job_method
@@ -70,7 +70,7 @@ class TaskManager():
 class WorkerThread(QThread):
     
     def __init__(self, task_manager: TaskManager):
-        super().__init__(task_manager.unfinished_tasks[0].parent)
+        super().__init__(task_manager.unfinished_tasks[0].parent_id)
         self.task_manager = task_manager
 
     def run_job(self, job: JobDefinition):
