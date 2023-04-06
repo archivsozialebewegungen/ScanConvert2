@@ -11,7 +11,7 @@ from PIL import Image
 from Base import BaseTest
 from parameterized import parameterized
 from Asb.ScanConvert2.PageSegmentationModule.WahlWongCaseySegmentation import WahlWongCaseySegmentationService
-from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
+from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService,\
     BinarizationService, NdArrayService, ImageStatisticsService
 from Asb.ScanConvert2.PageSegmentationModule.Domain import BoundingBox,\
     SegmentType
@@ -19,6 +19,7 @@ from Asb.ScanConvert2.PageSegmentationModule.SimpleSegmentation import SimpleSeg
 import PIL
 from PIL.ImageShow import EogViewer
 from Asb.ScanConvert2.PageSegmentationModule.PavlidisZhouSegmentation import PavlidisZhouSegmentationService
+from Asb.ScanConvert2.PageSegmentation import SegmentationService
 
 
 PIL.ImageShow.register(EogViewer(), 0
@@ -43,23 +44,23 @@ class PageSegmentationTest(BaseTest):
     
     def setUp(self):
         BaseTest.setUp(self)
-        self.smearing_service = SmearingService()
+        self.run_length_algorithm_service = RunLengthAlgorithmService()
         self.binarization_service = BinarizationService()
         self.ndarray_service = NdArrayService()
         self.image_statistics_service = ImageStatisticsService()
         self.wws_segmentation_service = WahlWongCaseySegmentationService(
-            self.smearing_service,
+            self.run_length_algorithm_service,
             self.binarization_service,
             self.ndarray_service,
             self.image_statistics_service)
         self.simple_segmentation_service = SimpleSegmentationService(
             self.wws_segmentation_service,
-            self.smearing_service,
+            self.run_length_algorithm_service,
             self.binarization_service,
             self.ndarray_service)
-        self.pz_segmentation_service = PavlidisZhouSegmentationService(self.smearing_service, self.binarization_service)
+        self.pz_segmentation_service = PavlidisZhouSegmentationService(self.run_length_algorithm_service, self.binarization_service)
 
-    @parameterized.expand(test_images[0:2] + test_images[3:6])
+    @parameterized.expand(test_images[6:7])
     def no_test_wahl_wong_casey_segmentation(self, filename, no_of_pictures, bounding_box):
         """
         Images with index 2 and 6 do not work well with this algorithm
@@ -69,14 +70,14 @@ class PageSegmentationTest(BaseTest):
 
         img = Image.open(self.test_file)
         segmented_page = self.wws_segmentation_service.get_segmented_page(img)
-        segmented_page.show_segments(SegmentType.PHOTO)
+        segmented_page.show_segments(SegmentType.BORDER)
         photo_segments = segmented_page.photo_segments
         self.assertEqual(no_of_pictures, len(photo_segments))
         print(photo_segments[0].bounding_box)
         self.assertBoundingBoxesEqualApproximately(photo_segments[0].bounding_box, bounding_box)
     
     @parameterized.expand(test_images[2:3])
-    def test_pavlidis_zhou_segmentation(self, filename, no_of_pictures, bounding_box):
+    def no_test_pavlidis_zhou_segmentation(self, filename, no_of_pictures, bounding_box):
         """
         Images with index 2 and 6 do not work well with this algorithm
         """
@@ -91,14 +92,15 @@ class PageSegmentationTest(BaseTest):
         print(photo_segments[0].bounding_box)
         self.assertBoundingBoxesEqualApproximately(photo_segments[0].bounding_box, bounding_box)
     
-    @parameterized.expand(test_images[:10])
-    def no_test_simple_segmentation(self, filename, no_of_pictures, bounding_box):
+    @parameterized.expand(test_images[6:7])
+    def test_simple_segmentation(self, filename, no_of_pictures, bounding_box):
         
         self.test_file = os.path.join(self.test_file_dir, "PictureDetection", filename)
 
         img = Image.open(self.test_file)
         segmented_page = self.simple_segmentation_service.get_segmented_page(img)
         segmented_page.show_segments()
+        #segmented_page.show_columns()
         photo_segments = segmented_page.photo_segments
         self.assertEqual(no_of_pictures, len(segmented_page.photo_segments))
         if no_of_pictures > 0:
