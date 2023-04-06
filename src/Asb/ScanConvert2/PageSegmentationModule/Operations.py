@@ -65,10 +65,96 @@ class BinarizationService(object):
         threshold = threshold_niblack(in_array)
         return in_array > threshold
 
-class SmearingService(object):
+class RunLengthAlgorithmService(object):
     """
     Implementation of a constrained run length algorithm (CRLA)
     """
+    
+    def calculate_0_degrees_run_lengths(self, bin_img: ndarray, projection_color=BINARY_BLACK) -> ndarray:
+        
+        matrix = np.zeros_like(bin_img, dtype=np.uint16)
+        width = matrix.shape[1]
+        height = matrix.shape[0]
+        
+        for row_idx in range(0, height):
+            row = bin_img[row_idx]
+            counter = 0
+            for col_idx in range(0, width):
+                if row[col_idx] != projection_color:
+                    counter = 0
+                else:
+                    counter += 1
+                    matrix[row_idx, col_idx] = counter
+            for col_idx in reversed(range(0, width-1)):
+                if matrix[row_idx, col_idx] == 0:
+                    continue
+                if matrix[row_idx, col_idx + 1] > matrix[row_idx, col_idx]:
+                    matrix[row_idx, col_idx] = matrix[row_idx, col_idx + 1]
+        
+        return matrix
+    
+    def calculate_45_degrees_run_lengths(self, bin_img: ndarray, projection_color=BINARY_BLACK) -> ndarray:
+        
+        matrix = np.zeros_like(bin_img, dtype=np.uint16)
+        width = matrix.shape[1]
+        height = matrix.shape[0]
+        
+        for projection_idx in range(0, width):
+            col_idx = projection_idx
+            row_idx = 0
+            counter = 0
+            while col_idx < width and row_idx < height:
+                if bin_img[row_idx, col_idx] != projection_color:
+                    counter = 0
+                else:
+                    counter += 1
+                    matrix[row_idx, col_idx] = counter
+                col_idx += 1
+                row_idx += 1
+            col_idx -= 1
+            row_idx -= 1
+            while col_idx > projection_idx:
+                col_idx -= 1
+                row_idx -= 1
+                if matrix[row_idx, col_idx] == 0:
+                    continue
+                if matrix[row_idx + 1, col_idx + 1] > matrix[row_idx, col_idx]:
+                    matrix[row_idx, col_idx] = matrix[row_idx + 1, col_idx + 1]
+
+        for projection_idx in range(1, height):
+            row_idx = projection_idx
+            col_idx = 0
+            counter = 0
+            while col_idx < width and row_idx < height:
+                if bin_img[row_idx, col_idx] != projection_color:
+                    counter = 0
+                else:
+                    counter += 1
+                    matrix[row_idx, col_idx] = counter
+                col_idx += 1
+                row_idx += 1
+
+            col_idx -= 1
+            row_idx -= 1
+            while row_idx > projection_idx:
+                col_idx -= 1
+                row_idx -= 1
+                if matrix[row_idx, col_idx] == 0:
+                    continue
+                if matrix[row_idx + 1, col_idx + 1] > matrix[row_idx, col_idx]:
+                    matrix[row_idx, col_idx] = matrix[row_idx + 1, col_idx + 1]
+        
+        return matrix
+
+    def calculate_90_degrees_run_lengths(self, bin_img: ndarray, projection_color = BINARY_BLACK):
+        
+        matrix = self.calculate_0_degrees_run_lengths(np.rot90(bin_img, -1), projection_color)
+        return np.rot90(matrix)
+    
+    def calculate_135_degrees_run_lenghts(self, bin_img: ndarray, projection_color = BINARY_BLACK):
+        
+        matrix = self.calculate_45_degrees_run_lengths(np.rot90(bin_img, -1), projection_color)
+        return np.rot90(matrix)
     
     def smear_vertical(self, bin_img: ndarray, constraint: int, boundary_color = BINARY_BLACK):
         
@@ -76,7 +162,8 @@ class SmearingService(object):
         return np.rot90(smeared_img)
 
     def smear_horizontal(self, bin_img: ndarray, constraint: int, boundary_color = BINARY_BLACK):
-        
+        # This is much faster (factor 1:3) than using the generic
+        # run length methods to implement smearing
         height = bin_img.shape[0]
         width = bin_img.shape[1]
         smeared_img = bin_img.copy()

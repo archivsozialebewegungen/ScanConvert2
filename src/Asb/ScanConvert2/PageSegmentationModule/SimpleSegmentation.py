@@ -3,16 +3,17 @@ Created on 22.03.2023
 
 @author: michael
 '''
-from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
+from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService, NdArrayService
-from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage,\
-    BINARY_BLACK, Segment, BoundingBox
+from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
+    BINARY_BLACK, Segment, BoundingBox, BINARY_WHITE
 from injector import inject
 from PIL import Image
 import numpy as np
 import cv2
 import math
 from Asb.ScanConvert2.PageSegmentationModule.WahlWongCaseySegmentation import WahlWongCaseySegmentationService
+
 
 class SimpleSegment(Segment):
     
@@ -56,11 +57,11 @@ class SimpleSegment(Segment):
         if self.bounding_box.overlaps_with(other.bounding_box):
             return True
         
-        if not self.bounding_box.is_vertically_near(other.bounding_box, 12):
+        if not self.bounding_box.is_vertically_near(other.bounding_box, 8):
             return False
         
-        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, 10):
-            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, 10):
+        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, 8):
+            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, 8):
                 return False
         
         return True     
@@ -82,6 +83,7 @@ class SimpleSegment(Segment):
     def __str__(self):
         
         return "%s" % self.bounding_box
+
 
 class SimpleSegmentationService(object):
     '''
@@ -108,22 +110,28 @@ class SimpleSegmentationService(object):
     '''
 
     @inject
-    def __init__(self, wws_segmentation: WahlWongCaseySegmentationService, smearing_service: SmearingService, binarization_service: BinarizationService, ndarray_service: NdArrayService):
+    def __init__(self, wws_segmentation: WahlWongCaseySegmentationService,
+                 run_length_algorithm_service: RunLengthAlgorithmService,
+                 binarization_service: BinarizationService,
+                 ndarray_service: NdArrayService):
         '''
         Constructor
         '''
         self.wws_segmentation = wws_segmentation
-        self.smearing_service = smearing_service
+        self.run_length_algorithm_service = run_length_algorithm_service
         self.binarization_service = binarization_service
         self.ndarray_service = ndarray_service
         
     def get_segmented_page(self, img: Image):
         
-        rectangles = self._calculate_rectangles(img)
+        bin_ndarray = self.binarization_service.binarize_otsu(img)
+        rectangles = self._calculate_rectangles(bin_ndarray)
         angle = self._calculate_rotation_angle(rectangles)            
         if abs(angle) > 0.2:
             img = img.rotate(angle, expand=True, fillcolor="white")
-            rectangles = self._calculate_rectangles(img)
+            bin_ndarray = self.binarization_service.binarize_otsu(img)
+        bin_ndarray = self._remove_vertical_and_horizontal_lines(bin_ndarray)
+        rectangles = self._calculate_rectangles(bin_ndarray)
         
         segments = []
         for rectangle in rectangles:
@@ -164,31 +172,69 @@ class SimpleSegmentationService(object):
                     break
             if not is_merged:
                 segmented_page.segments.append(child)
-            #segmented_page.show_segments()
+            # segmented_page.show_segments()
         
         return segmented_page
     
-    def _calculate_rectangles(self, img: Image):
+    def _remove_vertical_and_horizontal_lines(self, bin_ndarray):
+        
+        h_matrix = self.run_length_algorithm_service.calculate_0_degrees_run_lengths(bin_ndarray, BINARY_BLACK)
+        v_matrix = self.run_length_algorithm_service.calculate_90_degrees_run_lengths(bin_ndarray, BINARY_BLACK)
+        mask_v = np.zeros_like(bin_ndarray)
+        mask_v[v_matrix > 300] = BINARY_WHITE
+        mask_v[h_matrix > 50] = BINARY_BLACK
+        mask_h = np.zeros_like(bin_ndarray)
+        mask_h[h_matrix > 300] = BINARY_WHITE
+        mask_h[v_matrix > 50] = BINARY_BLACK
+        result = np.bitwise_or(mask_v, bin_ndarray)
+        return np.bitwise_or(mask_h, result)
 
-        binary_ndarray = self.binarization_service.binarize_otsu(img)
-        smeared_ndarray = self.smearing_service.smear_horizontal(binary_ndarray, 30)
+    def _calculate_rectangles(self, bin_ndarray):
+
+        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 30)
         smeared_ndarray_gray = self.ndarray_service.convert_binary_to_inverted_gray(smeared_ndarray)
         contours, _ = cv2.findContours(smeared_ndarray_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # contours = self._remove_border_contours(contours, smeared_ndarray_gray)
         
         rectangles = []
         for contour in contours:
+            if cv2.contourArea(contour) < 8:
+                continue
             rectangle = cv2.minAreaRect(contour)
             rectangles.append(rectangle)
 
         return rectangles
+    
+    def _remove_border_contours(self, contours, gray_ndarray):
+        
+        color_img = np.array(Image.fromarray(gray_ndarray).convert("RGB"))
+        
+        c_list = np.array(contours).tolist()
+        
+        c_list.sort(key=lambda x: BoundingBox.create_from_rectangle(cv2.boundingRect(x)).size)
+        cv2.drawContours(color_img, [c_list[-1]], 0, (255, 0, 0), 15)
+        
+        # for contour in contours:
+        #    
+        #    area = cv2.contourArea(contour)
+        #    segment = BoundingBox.create_from_rectangle(cv2.boundingRect(contour))
+        #    try:
+        #        if segment.size / area > 5:
+        #            print("Found border")
+        #            cv2.drawContours(color_img, [contour], 0, (255, 0, 0), 15)
+        #    except ZeroDivisionError:
+        #        print("Found strange contour without area")
+        
+        Image.fromarray(color_img).show()
+        return contours
 
     def _calculate_rotation_angle(self, rectangles):
         
         angles = []
         for rectangle in rectangles:
             line = self._find_long_side(rectangle)
-            dy = line[1][1]-line[0][1]
-            dx = line[1][0]-line[0][0]
+            dy = line[1][1] - line[0][1]
+            dx = line[1][0] - line[0][0]
             theta = math.atan2(dy, dx)
             angle = theta * 180 / math.pi
             angles.append(angle)
@@ -256,4 +302,4 @@ class SimpleSegmentationService(object):
         dy = coord1[1] - coord2[1]
         
         # Good old Pythagoras
-        return math.sqrt(dx*dx + dy*dy)
+        return math.sqrt(dx * dx + dy * dy)

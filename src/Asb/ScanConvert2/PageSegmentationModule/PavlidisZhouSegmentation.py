@@ -3,7 +3,7 @@ Created on 22.03.2023
 
 @author: michael
 '''
-from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService,\
+from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService,\
     BinarizationService
 from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage,\
     BINARY_BLACK, Segment, BoundingBox
@@ -68,11 +68,11 @@ class PavlidisZhouSegmentationService(object):
     '''
 
     @inject
-    def __init__(self, smearing_service: SmearingService, binarization_service: BinarizationService):
+    def __init__(self, smearing_service: RunLengthAlgorithmService, binarization_service: BinarizationService):
         '''
         Constructor
         '''
-        self.smearing_service = smearing_service
+        self.run_length_algorithm_service = smearing_service
         self.binarization_service = binarization_service
         
     def get_segmented_page(self, img: Image):
@@ -81,9 +81,9 @@ class PavlidisZhouSegmentationService(object):
         binary_ndarray = self.binarization_service.binarize_otsu(img)
         print("Start smearing")
         # Remove white space between characters
-        smeared_ndarray = self.smearing_service.smear_horizontal(binary_ndarray, 35)
+        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(binary_ndarray, 35)
         # Remove black noise in column gaps
-        #smeared_ndarray = self.smearing_service.smear_vertical(smeared_ndarray, 5, BINARY_WHITE)
+        #smeared_ndarray = self.run_length_algorithm_service.smear_vertical(smeared_ndarray, 5, BINARY_WHITE)
         print("Start segmentation")
         segmented_page = self._assemble_segment_matrix(smeared_ndarray, SegmentedPage(img))
         print("End Segmentation")

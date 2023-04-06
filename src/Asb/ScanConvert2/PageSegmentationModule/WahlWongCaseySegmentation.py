@@ -10,7 +10,7 @@ from numpy.core.records import ndarray
 
 from Asb.ScanConvert2.PageSegmentationModule.Domain import Segment, BoundingBox, \
     SegmentedPage, BINARY_WHITE, SegmentType
-from Asb.ScanConvert2.PageSegmentationModule.Operations import SmearingService, \
+from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService, NdArrayService, ImageStatisticsService
 import numpy as np
 
@@ -83,12 +83,12 @@ class WahlWongCaseySegmentationService(object):
     
     @inject
     def __init__(self,
-                 smearing_service: SmearingService,
+                 smearing_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService,
                  ndarray_sevice: NdArrayService,
                  image_statistics_service: ImageStatisticsService):
         
-        self.smearing_service = smearing_service
+        self.run_length_algorithm_service = smearing_service
         self.binarization_service = binarization_service
         self.ndarray_service = ndarray_sevice
         self.image_statistics_service = image_statistics_service
@@ -130,12 +130,12 @@ class WahlWongCaseySegmentationService(object):
     def _smear_image(self, binary_ndarray: ndarray) -> ndarray:
         
         print("First horizontal smear")
-        hor_smeared = self.smearing_service.smear_horizontal(binary_ndarray, 300)
+        hor_smeared = self.run_length_algorithm_service.smear_horizontal(binary_ndarray, 300)
         print("Vertical smear")
-        ver_smeared = self.smearing_service.smear_vertical(binary_ndarray, 500)
+        ver_smeared = self.run_length_algorithm_service.smear_vertical(binary_ndarray, 500)
         print("Second horizontal smear")
         combined = np.logical_or(hor_smeared, ver_smeared)
-        final = self.smearing_service.smear_horizontal(combined, 20)
+        final = self.run_length_algorithm_service.smear_horizontal(combined, 20)
         print("Smearing done.")
         return final
     
