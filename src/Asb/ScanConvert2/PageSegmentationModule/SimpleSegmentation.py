@@ -3,68 +3,55 @@ Created on 22.03.2023
 
 @author: michael
 '''
+import math
+
+from PIL import Image
+import cv2
+from injector import inject
+from numpy.array_api._dtypes import uint8
+
+from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
+    Segment, BoundingBox, SegmentType, GRAY_WHITE
+from Asb.ScanConvert2.PageSegmentationModule.LineRemoving import LineRemovingService
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService, NdArrayService
-from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
-    BINARY_BLACK, Segment, BoundingBox, BINARY_WHITE, SegmentType, GRAY_WHITE
-from injector import inject
-from PIL import Image
+from Asb.ScanConvert2.PageSegmentationModule.SegmentSorter import SegmentSorterService
 import numpy as np
-import cv2
-import math
-from Asb.ScanConvert2.PageSegmentationModule.WahlWongCaseySegmentation import WahlWongCaseySegmentationService
-from numpy.array_api._dtypes import uint8
-from Asb.ScanConvert2.Algorithms import RGB_WHITE
 
 
 class SimpleSegment(Segment):
     
-    
-    def __init__(self, segment_id, contour, hierarchy, segment_type=SegmentType.UNKNOWN):
+    @classmethod
+    def create_from_rectangle(cls, rectangle):
         
-        super().__init__(BoundingBox.create_from_rectangle(cv2.boundingRect(contour)))
-        self.segment_id = segment_id
-        self.all_segments = []
-        self.contours = [contour]
-        self.next_id = hierarchy[0]
-        if self.next_id < 0:
-            self.next_id = None
-        self.previous_id = hierarchy[1]
-        if self.previous_id < 0:
-            self.previous_id = None
-        self.child_id = hierarchy[2]
-        if self.child_id < 0:
-            self.child_id = None
-        self.parent_id = hierarchy[3]
-        if self.parent_id < 0:
-            self.parent_id = None
-        
-        self.hierarchy = hierarchy
-        
-    def find_children(self, segment_id=None, children=[]):
-        
-        if segment_id is None:
-            segment_id = self.segment_id
-        for segment in self.all_segments:
-            if segment_id == segment.parent_id:
-                children.append(segment)
-                children = self.find_children(segment.segment_id, children)
+        points = cv2.boxPoints(rectangle)
+        min_x = max_x = points[0][0]
+        min_y = max_y = points[0][1]
+        for point in points[1:]:
+            if point[0] < min_x:
+                min_x = point[0]
+            if point[0] > max_x:
+                max_x = point[0]
+            if point[1] < min_y:
+                min_y = point[1]
+            if point[1] > max_y:
+                max_y = point[1]
                 
-        return children
+        return SimpleSegment(BoundingBox(min_x, min_y, max_x, max_y))
     
     def can_be_merged_conservatively(self, other):
 
         if self.bounding_box.intersects_with(other.bounding_box):
             return True
         
-        if not self.bounding_box.is_vertically_near(other.bounding_box, 6):
+        if not self.bounding_box.is_vertically_near(other.bounding_box, 12):
             return False
         
-        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, 8):
-            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, 8):
+        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, 24):
+            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, 24):
                 return False
         
-        if self.bounding_box.has_nearly_the_same_width(other.bounding_box, 0.98):
+        if self.bounding_box.has_nearly_the_same_width(other.bounding_box, 0.96):
             return True
 
         return False
@@ -74,15 +61,11 @@ class SimpleSegment(Segment):
         if self.bounding_box.intersects_with(other.bounding_box):
             return True
         
-        if not self.bounding_box.is_vertically_near(other.bounding_box, 8):
-            return False
+        if self.bounding_box.aligns_left_at_the_bottom(other.bounding_box, 12, 24):
+            return True
         
-        if not self.bounding_box.is_horizontally_contained_in(other.bounding_box, 8):
-            if not other.bounding_box.is_horizontally_contained_in(self.bounding_box, 8):
-                return False
+        return False
         
-        return True     
-
     def merge(self, other):
         
         if other.bounding_box.x1 < self.bounding_box.x1:
@@ -96,19 +79,14 @@ class SimpleSegment(Segment):
             
         if other.bounding_box.y2 > self.bounding_box.y2:
             self.bounding_box.y2 = other.bounding_box.y2
-            
-        self.contours += other.contours
         
-    def __str__(self):
-        
-        return "%s ID: %s Parent-ID: %s" % (self.bounding_box, self.segment_id, self.parent_id)
-
 class ContourClassificationService(object):
     
     def __init__(self, run_length_algorithm_service: RunLengthAlgorithmService()):
         
         self.run_length_algorithm_service = run_length_algorithm_service
-        
+    
+
     def classify_segment(self, img, segment):
         
         img = img.convert("L")
@@ -160,35 +138,72 @@ class SimpleSegmentationService(object):
     '''
 
     @inject
-    def __init__(self, wws_segmentation: WahlWongCaseySegmentationService,
+    def __init__(self,
+                 sorter: SegmentSorterService,
+                 line_removing_service: LineRemovingService,
                  run_length_algorithm_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService,
                  ndarray_service: NdArrayService):
         '''
         Constructor
         '''
-        self.wws_segmentation = wws_segmentation
+        self.sorter = sorter
+        self.line_removing_service = line_removing_service
         self.run_length_algorithm_service = run_length_algorithm_service
         self.binarization_service = binarization_service
         self.ndarray_service = ndarray_service
+        self.skip_line_detection = False
         
     def get_segmented_page(self, img: Image):
         
+        # Step 1: Binarization
         bin_ndarray = self.binarization_service.binarize_otsu(img)
-        rectangles = self._calculate_rectangles(bin_ndarray)
-        angle = self._calculate_rotation_angle(rectangles)            
+        
+        # Step 2: Remove borders and lines
+        if not self.skip_line_detection:
+            bin_ndarray = self.line_removing_service.remove_lines(bin_ndarray)
+        
+        # Step 3: Smear the binary input horizontally and get the
+        # minimal inclosing rotated_rectangles 
+        rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
+        
+        # Step 4: Inspect the rotated rectangles and check if the original
+        # image is slightly rotated
+        angle = self._calculate_rotation_angle(rotated_rectangles)            
+        
+        # Step 5 (optional): Rotate the image if necessary and repeat
+        # steps 1 to 3
         if abs(angle) > 0.2:
             img = img.rotate(angle, expand=True, fillcolor="white")
             bin_ndarray = self.binarization_service.binarize_otsu(img)
-        bin_ndarray = self._remove_vertical_and_horizontal_lines(bin_ndarray)
-        rectangles = self._calculate_rectangles(bin_ndarray)
+            if not self.skip_line_detection:
+                bin_ndarray = self.line_removing_service.remove_lines(bin_ndarray)
         
+        rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
+        
+        # Step 6: Create Segments from the rotated rectangles
         segments = []
-        for rectangle in rectangles:
+        for rectangle in rotated_rectangles:
             segment = SimpleSegment.create_from_rectangle(rectangle)
             segments.append(segment)
-            
-        # First merge
+
+        segments = self._merge_segments(segments)
+
+        segments = self.sorter.sort_segments(segments)
+
+        segmented_page = SegmentedPage(img, segments)
+        
+        return segmented_page
+    
+    def _merge_segments(self, segments):
+        
+        segments = self._merge_intersections(segments)
+        segments = self._merge_conservatively(segments)
+        segments = self._merge_boldly(segments)
+        return self._merge_intersections(segments)
+    
+    def _merge_conservatively(self, segments):
+
         segments.sort(key=lambda x: x.size, reverse=True)
         
         merged_segments = []
@@ -196,88 +211,75 @@ class SimpleSegmentationService(object):
             
             is_merged = False
             for parent in merged_segments:
-                if parent_id.bounding_box.is_contained_within_self(child.bounding_box):
-                    is_merged = True
-                    break
                 if parent.can_be_merged_conservatively(child):
                     parent.merge(child)
                     is_merged = True
                     break
             if not is_merged:
                 merged_segments.append(child)
-            
-        segmented_page = SegmentedPage(img)
-        segmented_page.segments = merged_segments
+
+        return merged_segments
+    
+    def _merge_boldly(self, segments):
+
+        merged_segments = []
+    
+        segments.sort()
         
-        segmented_page.segments = []
-        merged_segments.sort(key=lambda x: x.bounding_box.y1)
-        
-        for child in merged_segments:
+        for child in segments:
             
             is_merged = False
-            for parent in segmented_page.segments:
+            for parent in merged_segments:
                 if parent.can_be_merged_boldly(child):
                     parent.merge(child)
                     is_merged = True
                     break
             if not is_merged:
-                segmented_page.segments.append(child)
-            # segmented_page.show_segments()
-        
-        return segmented_page
+                merged_segments.append(child)
     
-    def _remove_vertical_and_horizontal_lines(self, bin_ndarray):
-        
-        h_matrix = self.run_length_algorithm_service.calculate_0_degrees_run_lengths(bin_ndarray, BINARY_BLACK)
-        v_matrix = self.run_length_algorithm_service.calculate_90_degrees_run_lengths(bin_ndarray, BINARY_BLACK)
-        mask_v = np.zeros_like(bin_ndarray)
-        mask_v[v_matrix > 300] = BINARY_WHITE
-        mask_v[h_matrix > 50] = BINARY_BLACK
-        mask_h = np.zeros_like(bin_ndarray)
-        mask_h[h_matrix > 300] = BINARY_WHITE
-        mask_h[v_matrix > 50] = BINARY_BLACK
-        result = np.bitwise_or(mask_v, bin_ndarray)
-        return np.bitwise_or(mask_h, result)
+        return merged_segments
 
-    def _calculate_rectangles(self, bin_ndarray):
+    def _merge_intersections(self, segments):
+        
+        no_of_segments = len(segments)
+        segments = self._merge_intersections_loop(segments)
+        while len(segments) < no_of_segments:
+            no_of_segments = len(segments)
+            segments = self._merge_intersections_loop(segments)
+        return segments
+    
+    def _merge_intersections_loop(self, segments):
+
+        segments.sort(key=lambda x: x.size, reverse=True)
+        merged_segments = []
+        for child in segments:
+            is_merged = False
+            for parent in merged_segments:
+                if parent.bounding_box.intersects_with(child.bounding_box):
+                    parent.merge(child)
+                    is_merged = True
+                    break
+            if not is_merged:
+                merged_segments.append(child)
+            
+        return merged_segments
+    
+
+    def _calculate_rotated_rectangles(self, bin_ndarray):
 
         smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 30)
         smeared_ndarray_gray = self.ndarray_service.convert_binary_to_inverted_gray(smeared_ndarray)
         contours, _ = cv2.findContours(smeared_ndarray_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # contours = self._remove_border_contours(contours, smeared_ndarray_gray)
         
-        rectangles = []
+        rotated_rectangles = []
         for contour in contours:
             if cv2.contourArea(contour) < 8:
                 continue
-            rectangle = cv2.minAreaRect(contour)
-            rectangles.append(rectangle)
+            rotated_rectangle = cv2.minAreaRect(contour)
+            rotated_rectangles.append(rotated_rectangle)
 
-        return rectangles
+        return rotated_rectangles
     
-    def _remove_border_contours(self, contours, gray_ndarray):
-        
-        color_img = np.array(Image.fromarray(gray_ndarray).convert("RGB"))
-        
-        c_list = np.array(contours).tolist()
-        
-        c_list.sort(key=lambda x: BoundingBox.create_from_rectangle(cv2.boundingRect(x)).size)
-        cv2.drawContours(color_img, [c_list[-1]], 0, (255, 0, 0), 15)
-        
-        # for contour in contours:
-        #    
-        #    area = cv2.contourArea(contour)
-        #    segment = BoundingBox.create_from_rectangle(cv2.boundingRect(contour))
-        #    try:
-        #        if segment.size / area > 5:
-        #            print("Found border")
-        #            cv2.drawContours(color_img, [contour], 0, (255, 0, 0), 15)
-        #    except ZeroDivisionError:
-        #        print("Found strange contour without area")
-        
-        Image.fromarray(color_img).show()
-        return contours
-
     def _calculate_rotation_angle(self, rectangles):
         
         angles = []

@@ -20,6 +20,7 @@ import PIL
 from PIL.ImageShow import EogViewer
 from Asb.ScanConvert2.PageSegmentationModule.PavlidisZhouSegmentation import PavlidisZhouSegmentationService
 from Asb.ScanConvert2.PageSegmentation import SegmentationService
+from Asb.ScanConvert2.PageSegmentationModule.LineRemoving import LineRemovingService
 
 
 PIL.ImageShow.register(EogViewer(), 0
@@ -53,8 +54,10 @@ class PageSegmentationTest(BaseTest):
             self.binarization_service,
             self.ndarray_service,
             self.image_statistics_service)
+        self.line_removing_service = LineRemovingService(self.run_length_algorithm_service,
+                                                         self.ndarray_service)
         self.simple_segmentation_service = SimpleSegmentationService(
-            self.wws_segmentation_service,
+            self.line_removing_service,
             self.run_length_algorithm_service,
             self.binarization_service,
             self.ndarray_service)

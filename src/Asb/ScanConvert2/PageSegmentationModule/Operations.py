@@ -70,6 +70,15 @@ class RunLengthAlgorithmService(object):
     Implementation of a constrained run length algorithm (CRLA)
     """
     
+    def calculate_run_lengths(self, bin_img: ndarray) -> ndarray:
+
+        zero = self.calculate_0_degrees_run_lengths(bin_img, BINARY_BLACK)
+        fortyfive = self.calculate_45_degrees_run_lengths(bin_img, BINARY_BLACK)
+        ninety = self.calculate_90_degrees_run_lengths(bin_img, BINARY_BLACK)
+        onehundredthirtyfive = self.calculate_135_degrees_run_lenghts(bin_img, BINARY_BLACK)
+        
+        return np.array([zero, fortyfive, ninety, onehundredthirtyfive]).transpose()
+        
     def calculate_0_degrees_run_lengths(self, bin_img: ndarray, projection_color=BINARY_BLACK) -> ndarray:
         
         matrix = np.zeros_like(bin_img, dtype=np.uint16)

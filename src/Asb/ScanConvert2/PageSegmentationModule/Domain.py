@@ -39,6 +39,7 @@ class BoundingBox(object):
         self.y1 = y1
         self.x2 = x2
         self.y2 = y2
+        self.verbose = False
 
     def is_vertically_near(self, other, tolerance):
 
@@ -61,8 +62,24 @@ class BoundingBox(object):
         maximum = np.max([self.width, other.width])
         return minimum / maximum >= coefficient
 
+    def aligns_left_at_the_bottom(self, other, v_tolerance, h_tolerance):
+        
+        v_distance = other.y1 - self.y2
+        
+        if v_distance < 0 or v_distance > v_tolerance:
+            return False
+        
+        if other.x2 > self.x2 + h_tolerance:
+            return False
+        
+        return abs(self.x1 - other.x1) < h_tolerance
+
     def intersects_with(self, other):
         
+        if other.is_contained_within_self(self):
+            return True
+        if self.is_contained_within_self(other):
+            return True
         if self.point_within_self(other.x1, other.y1):
             return True
         if self.point_within_self(other.x1, other.y2):
@@ -85,30 +102,39 @@ class BoundingBox(object):
 
     def point_within_self(self, x, y):
         
+        assert(self.x1 <= self.x2)
+        assert(self.y1 <= self.y2)
         return x >= self.x1 and x <= self.x2 and y >= self.y1 and y <= self.y2
     
     def merge(self, other):
         
-        if other.x1 > self.x1:
+        if other.x1 < self.x1:
             self.x1 = other.x1
-        if other.x2 < self.x2:
+        if other.x2 > self.x2:
             self.x2 = other.x2
-        if other.y1 > self.y1:
+        if other.y1 < self.y1:
             self.y1 = other.y1
-        if other.y2 < self.y2:
+        if other.y2 > self.y2:
             self.y2 = other.y2
 
+        assert(self.x1 <= self.x2)
+        assert(self.y1 <= self.y2)
 
-    def __str__(self):
+
+    def copy(self):
         
-        return "(%d,%d|%d,%d)" % (self.x1, self.y1, self.x2, self.y2)
-
+        return BoundingBox(self.x1, self.y1, self.x2, self.y2)
+    
     width = property(lambda self: self.x2 - self.x1 + 1)            
     height = property(lambda self: self.y2 - self.y1 + 1)            
     size = property(lambda self: self.width * self.height)
     eccentricity = property(lambda self: self.width / self.height)
     coordinates = property(lambda self: (self.x1, self.y1, self.x2, self.y2))
     
+    def __str__(self):
+        
+        return "(%d,%d|%d,%d)" % (self.x1, self.y1, self.x2, self.y2)
+
     def __eq__(self, other):
         """
         This is slightly inconsistent - this operator is
@@ -149,163 +175,74 @@ class BoundingBox(object):
             return self.x1 >= other.x1
         else:
             return self.y1 >= other.y1
-        
-class Column(object):
-    
-    def __init__(self):
-        
-        self._threshold = 20
-        self._segments = []
-        self._bounding_box = None
-    
-    def add_segment(self, segment):
-        
-        self._bounding_box = None
-        self._segments.append(segment)
-    
-    def _calculate_bounding_box(self):
-        
-        if self._bounding_box is not None:
-            return self._bounding_box
-        
-        self._bounding_box = self._segments[0].bounding_box
-        for segment in self._segments[1:]:
-            if segment.bounding_box.x1 < self._bounding_box.x1:
-                self._bounding_box.x1 = segment.bounding_box.x1
-            if segment.bounding_box.x2 > self._bounding_box.x2:
-                self._bounding_box.x2 = segment.bounding_box.x2
-            if segment.bounding_box.y1 < self._bounding_box.y1:
-                self._bounding_box.y1 = segment.bounding_box.y1
-            if segment.bounding_box.y2 > self._bounding_box.y2:
-                self._bounding_box.y2 = segment.bounding_box.y2
-        
-        return self._bounding_box
-        
-    def __eq__(self, other):
-        
-        return self.bounding_box == other.bounding_box
-    
-    def __lt__(self, other):
-        """
-        A larger y1 value for self means that this columns comes *before*
-        the other column, because the coordinate system is upside down.
-        """
-        
-        if abs(self.bounding_box.y1 - other.bounding_box.y1) > self._threshold:
-            # Start with the most simple case: the columns are completely
-            # above each other
-            
-            if self.bounding_box.y1 < other.bounding_box.y2:
-                return True
-            if other.bounding_box.y1 < self.bounding_box.y2:
-                return False 
-           
-            # The columns are vertically apart, so the higher starting column is
-            # is the smaller, i.e. left column.
-            
-            if self.bounding_box.y1 < other.bounding_box.y1:
-                first = self
-                second = other
-            else:
-                second = self
-                first = other
-            
-            assert(first.bounding_box.y1 < second.bounding_box.y1)
-            
-            # But there is an exception: If the second column is to
-            # the left of the first column and starts before the
-            # end of the first column, then the second is really
-            # the first column
-            # side starts
-            # within the length of the right column, it still needs
-            # to come first
-            
-            if second.bounding_box.x2 < first.bounding_box.x1:
-                # second is left to first
-                if second.bounding_box.y1 > first.bounding_box.y2:
-                    # starts prior to the end of the first column
-                    return self == second
-                
-            return self == first
-        
-        # The columns start nearly at the same height, so the
-        # leftmost column is the "smaller" one
-        return self.bounding_box.x1 < other.bounding_box.x1
-            
-    def __gt__(self, other):
-        
-        return (not self.__eq__(other)) and (not self.__lt__(other))
 
-    def __le__(self, other):
-        
-        
-        return self == other or self < other
+class ObjectWithBoundingBox(object):
     
-    def __ge__(self, other):
-
-        return self == other or self > other
-        
-    bounding_box = property(_calculate_bounding_box)
-    size = property(lambda self: self.bounding_box.size)
-    
-    
-class Segment(object):
-    
-    def __init__(self, bounding_box: BoundingBox, segment_type: SegmentType = SegmentType.UNKNOWN):
+    def __init__(self, bounding_box):
         
         self.bounding_box = bounding_box
-        self.segment_type = segment_type
-        
+
     def __eq__(self, other):
         
         return self.bounding_box == other.bounding_box
             
     def __le__(self, other):
         
-        return self.bounding_box <= other.bounding_box
-        
+        return self < other or self == other
+    
     def __lt__(self, other):
         
-        return self.bounding_box < other.bounding_box
+        if abs(self.bounding_box.y1 - other.bounding_box.y1) < 20:
+            return self.bounding_box.x1 < other.bounding_box.x1
+        else:
+            return self.bounding_box.y1 < other.bounding_box.y1
 
     def __ge__(self, other):
         
-        return self.bounding_box >= other.bounding_box
+        return self > other or self == other
         
     def __gt__(self, other):
         
-        return self.bounding_box > other.bounding_box
+        return other < self
+    
+    def __str__(self):
+        
+        return "%s" % self.bounding_box
 
         
     width = property(lambda self: self.bounding_box.width)
     height = property(lambda self: self.bounding_box.height)
     size = property(lambda self: self.bounding_box.size)
     coordinates = property(lambda self: self.bounding_box.coordinates)
+
+class Segment(ObjectWithBoundingBox):
+    
+    def __init__(self, bounding_box: BoundingBox, segment_type: SegmentType = SegmentType.UNKNOWN):
+
+        super().__init__(bounding_box)
+        self.segment_type = segment_type
+        
         
 class SegmentedPage(object):
     
-    def __init__(self, original_img: Image):
+    def __init__(self, original_img: Image, segments):
         
         self.original_img = original_img
-        self.segments = []
+        self.segments = segments
         
-    def _get_segments(self, segment_type: SegmentType):
+    def _get_segments(self, segment_type: SegmentType=None):
         
         type_segments = []
         for segment in self.segments:
-            if segment.segment_type == segment_type:
+            if segment_type is None:
+                type_segments.append(segment)
+            elif segment.segment_type == segment_type:
                 type_segments.append(segment)
         return type_segments
-    
-    def add_segment(self, segment: Segment):
-        
-        self.segments.append(segment)
         
     def show_segments(self, segment_type = None):
         
-        display_segments = self.segments
-        if segment_type is not None:
-            display_segments = self._get_segments(segment_type)
+        display_segments = self._get_segments(segment_type)
             
         background = self.original_img.convert("RGBA")
         foreground = Image.new("RGBA", background.size, (255, 255, 255, 0))
@@ -318,104 +255,43 @@ class SegmentedPage(object):
                                 fill = (255, 0, 0, 60),
                                 outline =(255,0,0,255),
                                 width = 5)
+        counter = 0
+        font = ImageFont.truetype("/usr/share/fonts/truetype/liberation2/LiberationSerif-Bold.ttf", 80)
+        for segment in display_segments: 
+            counter += 1
+            draw_img.text([segment.bounding_box.x1,
+                           segment.bounding_box.y1],
+                           "%d" % counter,
+                           fill="red",
+                           font=font)
+        
         out = Image.alpha_composite(background, foreground)
         out.show()
 
-    def show_columns(self, segment_type = None):
+    def show_blocks(self):
         
         background = self.original_img.convert("RGBA")
         foreground = Image.new("RGBA", background.size, (255, 255, 255, 0))
         draw_img = ImageDraw.Draw(foreground)
         font = ImageFont.truetype("/usr/share/fonts/truetype/liberation2/LiberationSerif-Bold.ttf", 80)
         counter = 0
-        columns = self.get_sorted_columns()
-        #assert(columns[5] < columns[10])
-        for column in columns: 
-            draw_img.rectangle([column.bounding_box.x1,
-                                column.bounding_box.y1,
-                                column.bounding_box.x2,
-                                column.bounding_box.y2], 
+        for block in self.bb_objects: 
+            draw_img.rectangle([block.bounding_box.x1,
+                                block.bounding_box.y1,
+                                block.bounding_box.x2,
+                                block.bounding_box.y2], 
                                 fill = (0, 255, 0, 60),
                                 outline =(0, 255, 0,255),
                                 width = 5)
-        for column in columns: 
+        for block in self.bb_objects: 
             counter += 1
-            draw_img.text([column.bounding_box.x1,
-                           column.bounding_box.y1],
-                        "%d (%d,%d|%d,%d)" % (counter,
-                                        column.bounding_box.x1,
-                                        column.bounding_box.y1,
-                                        column.bounding_box.x2,
-                                        column.bounding_box.y2,
-                                ),
+            draw_img.text([block.bounding_box.x1,
+                           block.bounding_box.y1],
+                           "%d" % counter,
                            fill="red",
                            font=font)
         out = Image.alpha_composite(background, foreground)
         out.show()
-
-    def get_sorted_columns(self):
-        
-        unsorted_columns = self.find_columns()
-        sorted_columns = []
-        while len(unsorted_columns) > 1:
-            min_column = unsorted_columns[0]
-            for column in unsorted_columns[1:]:
-                if abs(column.bounding_box.y1 - min_column.bounding_box.y1) < 20:
-                    # sloppy implementation of "equals"
-                    if column.bounding_box.x1 < min_column.bounding_box.x1:
-                        min_column = column
-                else:
-                    if column.bounding_box.y1 < min_column.bounding_box.y1:
-                        min_column = column
-            sorted_columns.append(min_column)
-            unsorted_columns.remove(min_column)
-        sorted_columns.append(unsorted_columns[0])
-
-        sort_error = True
-        while sort_error:
-            sort_error = False
-            for idx in range(0, len(sorted_columns) - 1):
-                if sorted_columns[idx] > sorted_columns[idx + 1]:
-                    print("Fixing sort error")
-                    next_col = sorted_columns[idx + 1]
-                    sorted_columns[idx + 1] = sorted_columns[idx]
-                    sorted_columns[idx] = next_col
-                    sort_error = True
-                    break
-    
-        return sorted_columns
-    
-    def find_columns(self):
-        
-        columns = []
-        segments = self.segments.copy()
-        segments.sort(key=lambda x: x.size, reverse=True)
-        for segment in segments:
-            segment_merged = False
-            for column in columns:
-                if segment.bounding_box.is_horizontally_contained_in(column.bounding_box, 10) and \
-                    segment.bounding_box.has_nearly_the_same_width(column.bounding_box, 0.95):
-                    column.add_segment(segment)
-                    segment_merged = True
-                    break
-            if not segment_merged:
-                column = Column()
-                column.add_segment(segment)
-                columns.append(column)
-                
-        columns.sort(key=lambda x: x.size, reverse=True)
-        merged_columns = []
-        for column in columns:
-            column_merged = False
-            for merge_column in merged_columns:
-                if merge_column.bounding_box.intersects_with(column.bounding_box):
-                    for segment in column._segments:
-                        merge_column.add_segment(segment)
-                    column_merged = True
-            if not column_merged:
-                merged_columns.append(column)
-                
-        return merged_columns
                 
     text_segments = property(lambda self: self._get_segments(SegmentType.TEXT))
     photo_segments = property(lambda self: self._get_segments(SegmentType.PHOTO))
