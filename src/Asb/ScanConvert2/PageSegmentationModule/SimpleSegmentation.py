@@ -22,22 +22,10 @@ import numpy as np
 class SimpleSegment(Segment):
     
     @classmethod
-    def create_from_rectangle(cls, rectangle):
+    def create_from_segment(cls, segment: Segment):
         
-        points = cv2.boxPoints(rectangle)
-        min_x = max_x = points[0][0]
-        min_y = max_y = points[0][1]
-        for point in points[1:]:
-            if point[0] < min_x:
-                min_x = point[0]
-            if point[0] > max_x:
-                max_x = point[0]
-            if point[1] < min_y:
-                min_y = point[1]
-            if point[1] > max_y:
-                max_y = point[1]
-                
-        return SimpleSegment(BoundingBox(min_x, min_y, max_x, max_y))
+        assert(segment.segment_type is not None)
+        return SimpleSegment(segment.bounding_box, segment.segment_type)
     
     def can_be_merged_conservatively(self, other):
 
@@ -66,53 +54,6 @@ class SimpleSegment(Segment):
         
         return False
         
-    def merge(self, other):
-        
-        if other.bounding_box.x1 < self.bounding_box.x1:
-            self.bounding_box.x1 = other.bounding_box.x1
-            
-        if other.bounding_box.x2 > self.bounding_box.x2:
-            self.bounding_box.x2 = other.bounding_box.x2
-            
-        if other.bounding_box.y1 < self.bounding_box.y1:
-            self.bounding_box.y1 = other.bounding_box.y1
-            
-        if other.bounding_box.y2 > self.bounding_box.y2:
-            self.bounding_box.y2 = other.bounding_box.y2
-        
-class ContourClassificationService(object):
-    
-    def __init__(self, run_length_algorithm_service: RunLengthAlgorithmService()):
-        
-        self.run_length_algorithm_service = run_length_algorithm_service
-    
-
-    def classify_segment(self, img, segment):
-        
-        img = img.convert("L")
-        img_ndarray = np.array(img)
-        mask = self._get_segment_mask(segment, img_ndarray.shape)
-        
-        img_ndarray[mask > 0] = GRAY_WHITE
-        
-        img = Image.fromarray(img_ndarray)
-        img.show()
-        
-        return SegmentType.UNKNOWN
-    
-    def _get_segment_mask(self, segment, shape):
-
-        drawing_ndarray = np.zeros(shape, dtype=uint8)
-        cv2.drawContours(drawing_ndarray, segment.contours, 0, 255, cv2.FILLED)
-        img = Image.fromarray(drawing_ndarray)
-        img.show()
-        child_segments = segment.find_children()
-        for child_segment in child_segments:
-            cv2.drawContours(drawing_ndarray, child_segment.contours, -1, 0, cv2.FILLED)
-            
-        return drawing_ndarray
-            
-
 class SimpleSegmentationService(object):
     '''
     This mixes some ideas from Pavlidis / Zhou 1992 with some of my own.
@@ -161,7 +102,7 @@ class SimpleSegmentationService(object):
         
         # Step 2: Remove borders and lines
         if not self.skip_line_detection:
-            bin_ndarray = self.line_removing_service.remove_lines(bin_ndarray)
+            bin_ndarray, border_segments = self.line_removing_service.remove_lines(bin_ndarray)
         
         # Step 3: Smear the binary input horizontally and get the
         # minimal inclosing rotated_rectangles 
@@ -177,20 +118,21 @@ class SimpleSegmentationService(object):
             img = img.rotate(angle, expand=True, fillcolor="white")
             bin_ndarray = self.binarization_service.binarize_otsu(img)
             if not self.skip_line_detection:
-                bin_ndarray = self.line_removing_service.remove_lines(bin_ndarray)
+                bin_ndarray, border_segments = self.line_removing_service.remove_lines(bin_ndarray)
         
         rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
         
         # Step 6: Create Segments from the rotated rectangles
         segments = []
         for rectangle in rotated_rectangles:
-            segment = SimpleSegment.create_from_rectangle(rectangle)
+            segment = SimpleSegment(BoundingBox.create_from_cv2_rotated_rectangle(rectangle))
             segments.append(segment)
 
         segments = self._merge_segments(segments)
-
+        for segment in border_segments:
+            segments.append(SimpleSegment.create_from_segment(segment))
         segments = self.sorter.sort_segments(segments)
-
+        
         segmented_page = SegmentedPage(img, segments)
         
         return segmented_page
@@ -264,7 +206,6 @@ class SimpleSegmentationService(object):
             
         return merged_segments
     
-
     def _calculate_rotated_rectangles(self, bin_ndarray):
 
         smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 30)

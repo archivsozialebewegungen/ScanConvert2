@@ -7,6 +7,7 @@ from enum import Enum
 
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+import cv2
 
 BINARY_BLACK = False
 BINARY_WHITE = True
@@ -21,15 +22,49 @@ class SegmentType(Enum):
     DRAWING = 3
     BORDER = 4
 
+border_colors = {
+    SegmentType.UNKNOWN: (255, 255, 0, 255),
+    SegmentType.TEXT: (255, 0, 0, 255),
+    SegmentType.PHOTO: (0, 255, 0, 255),
+    SegmentType.DRAWING: (0, 0, 255, 255),
+    SegmentType.BORDER: (0, 255, 255, 255),
+    }
+
+fill_colors = {
+    SegmentType.UNKNOWN: (255, 255, 0, 60),
+    SegmentType.TEXT: (255, 0, 0, 60),
+    SegmentType.PHOTO: (0, 255, 0, 60),
+    SegmentType.DRAWING: (0, 0, 255, 60),
+    SegmentType.BORDER: (0, 255, 255, 60),
+    }
+
 class BoundingBox(object):
 
     @classmethod
-    def create_from_rectangle(cls, rectangle):
+    def create_from_cv2_bounding_box(cls, cv2_bounding_box):
         
-        return BoundingBox(rectangle[0],
-                           rectangle[1],
-                           rectangle[0] + rectangle[2] - 1,
-                           rectangle[1] + rectangle[3] - 1)
+        return BoundingBox(cv2_bounding_box[0],
+                           cv2_bounding_box[1],
+                           cv2_bounding_box[0] + cv2_bounding_box[2] - 1,
+                           cv2_bounding_box[1] + cv2_bounding_box[3] - 1)
+
+    @classmethod
+    def create_from_cv2_rotated_rectangle(cls, cv2_rotated_rectangle):
+        
+        points = cv2.boxPoints(cv2_rotated_rectangle)
+        x1 = x2 = points[0][0]
+        y1 = y2 = points[0][1]
+        for point in points[1:]:
+            if point[0] < x1:
+                x1 = point[0]
+            if point[0] > x2:
+                x2 = point[0]
+            if point[1] < y1:
+                y1 = point[1]
+            if point[1] > y2:
+                y2 = point[1]
+        
+        return BoundingBox(round(x1), round(y1), round(x2), round(y2))
 
     def __init__(self, x1, y1, x2, y2):
         
@@ -150,60 +185,78 @@ class BoundingBox(object):
     
     def __lt__(self, other):
         
+        if self.__eq__(other):
+            return False
+
         if self.y1 == other.y1:
-            return self.x1 < other.x1
+            if self.x1 == other.x1:
+                if self.y2 == other.y2:
+                    return self.x2 < other.x2
+                else:
+                    return self.y2 < other.y2
+            else:
+                return self.x1 < other.x1
         else:
             return self.y1 < other.y1
 
     def __le__(self, other):
         
-        if self.y1 == other.y1:
-            return self.x1 <= other.x1
-        else:
-            return self.y1 <= other.y1
+        return self.__eq__(other) or self.__lt__(other)
     
     def __gt__(self, other):
-        
-        if self.y1 == other.y1:
-            return self.x1 > other.x1
-        else:
-            return self.y1 > other.y1
+
+        return other.__lt__(self)        
 
     def __ge__(self, other):
-        
-        if self.y1 == other.y1:
-            return self.x1 >= other.x1
-        else:
-            return self.y1 >= other.y1
+
+        return  self.__eq__(other) or other.__lt__(self)        
 
 class ObjectWithBoundingBox(object):
     
     def __init__(self, bounding_box):
         
         self.bounding_box = bounding_box
+        self.y_tolerance = 20
+        self.x_tolerance = 5
+
+    def merge(self, other):
+
+        self.bounding_box.merge(other.bounding_box)        
 
     def __eq__(self, other):
         
-        return self.bounding_box == other.bounding_box
+        return abs(self.bounding_box.y1 - other.bounding_box.y1) < self.y_tolerance and \
+            abs(self.bounding_box.x1 - other.bounding_box.x1) < self.x_tolerance and \
+            abs(self.bounding_box.y2 - other.bounding_box.y2) < self.y_tolerance and \
+            abs(self.bounding_box.x2 - other.bounding_box.x2) < self.x_tolerance
             
     def __le__(self, other):
         
-        return self < other or self == other
+        return self.__eq__(other) or self.__lt__(other) 
     
     def __lt__(self, other):
         
-        if abs(self.bounding_box.y1 - other.bounding_box.y1) < 20:
-            return self.bounding_box.x1 < other.bounding_box.x1
+        if self.__eq__(other):
+            return False
+        
+        if abs(self.bounding_box.y1 - other.bounding_box.y1) < self.y_tolerance:
+            if abs(self.bounding_box.x1 < other.bounding_box.x1) < self.x_tolerance:
+                if abs(self.bounding_box.y2 - other.bounding_box.y2) < self.y_tolerance:
+                    return self.bounding_box.x2 < other.bounding_box.x2
+                else:
+                    return self.bounding_box.y2 < other.bounding_box.y2
+            else:
+                return self.bounding_box.x1 < other.bounding_box.x1
         else:
             return self.bounding_box.y1 < other.bounding_box.y1
 
     def __ge__(self, other):
         
-        return self > other or self == other
+        return self.__eq__(other) or other.__lt__(self) 
         
     def __gt__(self, other):
         
-        return other < self
+        return other.__lt__(self)
     
     def __str__(self):
         
@@ -219,8 +272,14 @@ class Segment(ObjectWithBoundingBox):
     
     def __init__(self, bounding_box: BoundingBox, segment_type: SegmentType = SegmentType.UNKNOWN):
 
+        assert(segment_type is not None)
         super().__init__(bounding_box)
         self.segment_type = segment_type
+
+    def merge(self, other):
+        
+        super().merge(other)
+        self.segment_type = SegmentType.UNKNOWN
         
         
 class SegmentedPage(object):
@@ -252,8 +311,8 @@ class SegmentedPage(object):
                                 segment.bounding_box.y1,
                                 segment.bounding_box.x2,
                                 segment.bounding_box.y2], 
-                                fill = (255, 0, 0, 60),
-                                outline =(255,0,0,255),
+                                fill = fill_colors[segment.segment_type],
+                                outline = border_colors[segment.segment_type],
                                 width = 5)
         counter = 0
         font = ImageFont.truetype("/usr/share/fonts/truetype/liberation2/LiberationSerif-Bold.ttf", 80)
@@ -262,37 +321,12 @@ class SegmentedPage(object):
             draw_img.text([segment.bounding_box.x1,
                            segment.bounding_box.y1],
                            "%d" % counter,
-                           fill="red",
+                           fill= border_colors[segment.segment_type],
                            font=font)
         
         out = Image.alpha_composite(background, foreground)
         out.show()
 
-    def show_blocks(self):
-        
-        background = self.original_img.convert("RGBA")
-        foreground = Image.new("RGBA", background.size, (255, 255, 255, 0))
-        draw_img = ImageDraw.Draw(foreground)
-        font = ImageFont.truetype("/usr/share/fonts/truetype/liberation2/LiberationSerif-Bold.ttf", 80)
-        counter = 0
-        for block in self.bb_objects: 
-            draw_img.rectangle([block.bounding_box.x1,
-                                block.bounding_box.y1,
-                                block.bounding_box.x2,
-                                block.bounding_box.y2], 
-                                fill = (0, 255, 0, 60),
-                                outline =(0, 255, 0,255),
-                                width = 5)
-        for block in self.bb_objects: 
-            counter += 1
-            draw_img.text([block.bounding_box.x1,
-                           block.bounding_box.y1],
-                           "%d" % counter,
-                           fill="red",
-                           font=font)
-        out = Image.alpha_composite(background, foreground)
-        out.show()
-                
     text_segments = property(lambda self: self._get_segments(SegmentType.TEXT))
     photo_segments = property(lambda self: self._get_segments(SegmentType.PHOTO))
     drawing_segments = property(lambda self: self._get_segments(SegmentType.DRAWING))

@@ -11,6 +11,8 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola,\
 from Asb.ScanConvert2.PageSegmentationModule.Domain import BINARY_BLACK, GRAY_WHITE,\
     BINARY_WHITE, GRAY_BLACK, BoundingBox
 import numpy as np
+from math import sqrt
+from numpy.array_api._dtypes import uint8
 
 
 class ImageStatisticsService(object):
@@ -81,7 +83,7 @@ class RunLengthAlgorithmService(object):
         
     def calculate_0_degrees_run_lengths(self, bin_img: ndarray, projection_color=BINARY_BLACK) -> ndarray:
         
-        matrix = np.zeros_like(bin_img, dtype=np.uint16)
+        matrix = np.zeros_like(bin_img, dtype=np.uint32)
         width = matrix.shape[1]
         height = matrix.shape[0]
         
@@ -99,12 +101,12 @@ class RunLengthAlgorithmService(object):
                     continue
                 if matrix[row_idx, col_idx + 1] > matrix[row_idx, col_idx]:
                     matrix[row_idx, col_idx] = matrix[row_idx, col_idx + 1]
-        
+
         return matrix
     
     def calculate_45_degrees_run_lengths(self, bin_img: ndarray, projection_color=BINARY_BLACK) -> ndarray:
         
-        matrix = np.zeros_like(bin_img, dtype=np.uint16)
+        matrix = np.zeros_like(bin_img, dtype=np.float32)
         width = matrix.shape[1]
         height = matrix.shape[0]
         
@@ -153,7 +155,7 @@ class RunLengthAlgorithmService(object):
                 if matrix[row_idx + 1, col_idx + 1] > matrix[row_idx, col_idx]:
                     matrix[row_idx, col_idx] = matrix[row_idx + 1, col_idx + 1]
         
-        return matrix
+        return matrix.astype(np.uint32)
 
     def calculate_90_degrees_run_lengths(self, bin_img: ndarray, projection_color = BINARY_BLACK):
         

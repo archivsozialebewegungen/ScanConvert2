@@ -5,15 +5,14 @@ Created on 07.04.2023
 '''
 import math
 
-from PIL.Image import Image
+from PIL import Image
 import cv2
 
 from Asb.ScanConvert2.PageSegmentationModule.Domain import BoundingBox, \
-    BINARY_BLACK, BINARY_WHITE
+    BINARY_BLACK, BINARY_WHITE, Segment, SegmentType
 import numpy as np
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService,\
     NdArrayService
-
 
 def value_or_none(contour_id):
     
@@ -71,7 +70,7 @@ class Contour(object):
         self.parent_id = value_or_none(hierarchy[2])
         self.first_child_id = value_or_none(hierarchy[3])
         self.rectangle = RotatedRectangle(cv2.minAreaRect(cv2_contour))
-        self.bounding_box = BoundingBox.create_from_rectangle(cv2.boundingRect(cv2_contour))
+        self.bounding_box = BoundingBox.create_from_cv2_bounding_box(cv2.boundingRect(cv2_contour))
         
     def fetch_child_ids(self, all_contours, parent_id=None, child_ids=[]):
         
@@ -101,20 +100,43 @@ class LineRemovingService(object):
 
     def remove_lines(self, bin_ndarray):
 
-        v_line_mask = self.get_vertical_line_mask(bin_ndarray)
-        h_line_mask = self.get_horizontal_line_mask(bin_ndarray)
+        v_line_mask, v_segments = self.get_vertical_line_mask(bin_ndarray)
+        h_line_mask, h_segments = self.get_horizontal_line_mask(bin_ndarray)
         bin_ndarray[v_line_mask > 0] = 1
         bin_ndarray[h_line_mask > 0] = 1
         
-        return bin_ndarray
+        return bin_ndarray, v_segments + h_segments
         
     def get_vertical_line_mask(self, bin_ndarray):
         
-        mask = self.get_horizontal_line_mask(np.rot90(bin_ndarray, -1))
-        return np.rot90(mask)
+        mask = self.get_line_mask(np.rot90(bin_ndarray, -1))
+        back_rotated_mask = np.rot90(mask)
+        return back_rotated_mask, self.get_mask_segments(back_rotated_mask)
         
     def get_horizontal_line_mask(self, bin_ndarray):
+
+        mask = self.get_line_mask(bin_ndarray)
+        return mask, self.get_mask_segments(mask)
+
+    def get_mask_segments(self, mask):
+
+        gray_mask = np.zeros_like(mask, dtype=np.uint8)
+        gray_mask[mask == 0] = 255
+        gray_mask[mask > 0] = 0
+        cv2_contours, hierarchy = cv2.findContours(gray_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         
+        segments = []
+        for idx in range(0, len(cv2_contours)):
+            if hierarchy[0][idx][2] != -1:
+                continue
+            cv2_rotated_rectangle = cv2.minAreaRect(cv2_contours[idx])
+            bounding_box = BoundingBox.create_from_cv2_rotated_rectangle(cv2_rotated_rectangle)
+            segments.append(Segment(bounding_box, SegmentType.BORDER))
+
+        return segments
+        
+    def get_line_mask(self, bin_ndarray):
+                
         h_smeared_bin_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 60, BINARY_WHITE)
         gray_ndarray = self.ndarray_service.convert_binary_to_inverted_gray(h_smeared_bin_ndarray)
         contours = self.get_contours(gray_ndarray)
@@ -134,11 +156,8 @@ class LineRemovingService(object):
         mask = np.zeros_like(gray_ndarray)
         cv2.drawContours(mask, cv2_contours, -1, 255, cv2.FILLED)
         mask = self.run_length_algorithm_service.smear_horizontal(mask, 100, BINARY_BLACK)
-        return cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 8)))
-        
-        bin_ndarray[mask > 0] = 1
-        Image.fromarray(bin_ndarray).show()
 
+        return cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 8)))
         
     def get_contours(self, bin_ndarray):
                 
