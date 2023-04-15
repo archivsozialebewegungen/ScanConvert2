@@ -8,15 +8,14 @@ import math
 from PIL import Image
 import cv2
 from injector import inject
-from numpy.array_api._dtypes import uint8
-
 from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
-    Segment, BoundingBox, SegmentType, GRAY_WHITE
+    Segment, BoundingBox, SegmentType
 from Asb.ScanConvert2.PageSegmentationModule.LineRemoving import LineRemovingService
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService, NdArrayService
 from Asb.ScanConvert2.PageSegmentationModule.SegmentSorter import SegmentSorterService
 import numpy as np
+from Asb.ScanConvert2.PageSegmentationModule.SegmentClassification import SegmentClassificationService
 
 
 class SimpleSegment(Segment):
@@ -82,6 +81,7 @@ class SimpleSegmentationService(object):
     def __init__(self,
                  sorter: SegmentSorterService,
                  line_removing_service: LineRemovingService,
+                 classification_service: SegmentClassificationService,
                  run_length_algorithm_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService,
                  ndarray_service: NdArrayService):
@@ -90,6 +90,7 @@ class SimpleSegmentationService(object):
         '''
         self.sorter = sorter
         self.line_removing_service = line_removing_service
+        self.classification_service = classification_service
         self.run_length_algorithm_service = run_length_algorithm_service
         self.binarization_service = binarization_service
         self.ndarray_service = ndarray_service
@@ -97,21 +98,26 @@ class SimpleSegmentationService(object):
         
     def get_segmented_page(self, img: Image):
         
+        print("Step 1")
         # Step 1: Binarization
         bin_ndarray = self.binarization_service.binarize_otsu(img)
         
+        print("Step 2")
         # Step 2: Remove borders and lines
         if not self.skip_line_detection:
             bin_ndarray, border_segments = self.line_removing_service.remove_lines(bin_ndarray)
         
+        print("Step 3")
         # Step 3: Smear the binary input horizontally and get the
         # minimal inclosing rotated_rectangles 
         rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
         
+        print("Step 4")
         # Step 4: Inspect the rotated rectangles and check if the original
         # image is slightly rotated
         angle = self._calculate_rotation_angle(rotated_rectangles)            
         
+        print("Step 5")
         # Step 5 (optional): Rotate the image if necessary and repeat
         # steps 1 to 3
         if abs(angle) > 0.2:
@@ -122,20 +128,119 @@ class SimpleSegmentationService(object):
         
         rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
         
+        print("Step 6")
         # Step 6: Create Segments from the rotated rectangles
         segments = []
         for rectangle in rotated_rectangles:
             segment = SimpleSegment(BoundingBox.create_from_cv2_rotated_rectangle(rectangle))
             segments.append(segment)
 
+        print("Step 7")
+        # Step 7: Merge segments that seem to belong together
         segments = self._merge_segments(segments)
+        
+        print("Step 8")
+        # Step 8: Add the detected border segments to improve sorting
         for segment in border_segments:
             segments.append(SimpleSegment.create_from_segment(segment))
+            
+        print("Step 9")
+        # Step 9: Sort segments
         segments = self.sorter.sort_segments(segments)
         
-        segmented_page = SegmentedPage(img, segments)
+        print("Step 10")
+        # Step 10: Remove unnecessary border segment that lie within other
+        # segments
+        segmented_page = SegmentedPage(img, self._remove_border_segments(segments))
+        
+        print("Step 11")
+        # Step 11: Classifiy the segments
+        segmented_page = self.classification_service.classify_segmented_page(segmented_page)
+        
+        print("Step 12")
+        # Step 12: Remove very small "photos" and "drawings"
+        segmented_page = self._remove_small_illustrations(segmented_page)
+
+        print("Step 13")
+        segmented_page = self._merge_text_segments_into_columns(segmented_page)
+        
+        print("Step 14")
+        segmented_page.segments = self.sorter.sort_segments(segmented_page.segments)
+        return segmented_page
+    
+    def _remove_small_illustrations(self, segmented_page):
+
+        removable_segments = []
+        for segment in segmented_page.segments:
+            if segment.size < 50:
+                removable_segments.append(segment)
+                
+        for segment in removable_segments:
+            segmented_page.segments.remove(segment)
+                    
+        return segmented_page
+    
+    def _remove_border_segments(self, segments):
+
+        removable_border_segments = []
+        for segment in segments:
+            if segment.segment_type == SegmentType.BORDER:
+                for other_segment in segments:
+                    if segment.bounding_box == other_segment.bounding_box:
+                        continue
+                    if other_segment.bounding_box.is_contained_within_self(segment.bounding_box, 90):
+                        removable_border_segments.append(segment)
+                        break
+
+        for segment in removable_border_segments:
+            segments.remove(segment)
+            
+        return segments
+    
+    def _merge_text_segments_into_columns(self, segmented_page):
+
+        new_segment_list = []
+        segmented_page.segments.sort()
+        while len(segmented_page.segments) > 0:
+            current_segment = segmented_page.segments.pop(0)
+            new_segment_list.append(current_segment)
+            if current_segment.segment_type != SegmentType.TEXT:
+                continue
+            mergable_segment = self._find_mergable_text_segment(current_segment, new_segment_list + segmented_page.segments)
+            while mergable_segment is not None:
+                current_segment.merge(mergable_segment)
+                segmented_page.segments.remove(mergable_segment)
+                mergable_segment = self._find_mergable_text_segment(current_segment, new_segment_list + segmented_page.segments)
+        
+        segmented_page.segments = new_segment_list
         
         return segmented_page
+    
+    def _find_mergable_text_segment(self, current, segments):
+        
+        for segment in segments:
+            if segment.segment_type != SegmentType.TEXT:
+                continue
+            if segment == current:
+                continue
+            if (not segment.bounding_box.is_horizontally_contained_in(current.bounding_box, 10)) and \
+                (not current.bounding_box.is_horizontally_contained_in(segment.bounding_box, 10)):
+                continue
+            if self._are_mergable_without_collision(current, segment, segments):
+                return segment
+        return None
+        
+        
+    def _are_mergable_without_collision(self, segment1, segment2, segments):
+        
+        test_bounding_box = segment1.bounding_box.copy()
+        test_bounding_box.merge(segment2.bounding_box)
+        for segment in segments:
+            if segment == segment1 or segment == segment2:
+                continue
+            if test_bounding_box.intersects_with(segment.bounding_box):
+                return False
+        return True
     
     def _merge_segments(self, segments):
         
@@ -208,7 +313,7 @@ class SimpleSegmentationService(object):
     
     def _calculate_rotated_rectangles(self, bin_ndarray):
 
-        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 30)
+        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 40)
         smeared_ndarray_gray = self.ndarray_service.convert_binary_to_inverted_gray(smeared_ndarray)
         contours, _ = cv2.findContours(smeared_ndarray_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         

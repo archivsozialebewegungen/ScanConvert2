@@ -11,8 +11,7 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola,\
 from Asb.ScanConvert2.PageSegmentationModule.Domain import BINARY_BLACK, GRAY_WHITE,\
     BINARY_WHITE, GRAY_BLACK, BoundingBox
 import numpy as np
-from math import sqrt
-from numpy.array_api._dtypes import uint8
+from PIL.Image import Dither
 
 
 class ImageStatisticsService(object):
@@ -42,10 +41,24 @@ class NdArrayService(object):
 
 class BinarizationService(object):
 
+    def binarize_threshold(self, img: Image, threshold: int) -> ndarray:
+        
+        gray_img = img.convert("L")
+        in_array = np.asarray(gray_img)
+        return in_array > threshold
+    
     def binarize_floyd_steinberg(self, img: Image) -> ndarray:
         
         return np.asarray(img.convert("1"))
     
+    def binarize_rasterize(self, img: Image) -> ndarray:
+        
+        return np.asarray(img.convert("1", dither=Dither.RASTERIZE))
+
+    def binarize_ordered(self, img: Image) -> ndarray:
+        
+        return np.asarray(img.convert("1", dither=Dither.ORDERED))
+
     def binarize_otsu(self, img: Image) -> ndarray:
         
         gray_img = img.convert("L")
@@ -167,6 +180,12 @@ class RunLengthAlgorithmService(object):
         matrix = self.calculate_45_degrees_run_lengths(np.rot90(bin_img, -1), projection_color)
         return np.rot90(matrix)
     
+    def signal_cross_correlation(self, binary_segment_data: ndarray, line_idx: int, distance: int):
+        
+        width = binary_segment_data.shape[1]
+        intermediate = np.bitwise_xor(binary_segment_data[line_idx], binary_segment_data[line_idx + distance])
+        return 1 - (2 / width)*np.sum(intermediate)
+        
     def smear_vertical(self, bin_img: ndarray, constraint: int, boundary_color = BINARY_BLACK):
         
         smeared_img = self.smear_horizontal(np.rot90(bin_img, -1), constraint, boundary_color)

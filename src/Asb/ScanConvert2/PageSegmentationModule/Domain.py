@@ -89,7 +89,8 @@ class BoundingBox(object):
     
     def is_horizontally_contained_in(self, other, tolerance):
         
-        return other.x1 - tolerance < self.x1 and other.x2 + tolerance > self.x1
+        return other.x1 - tolerance < self.x1 and other.x2 + tolerance > self.x2
+    
     
     def has_nearly_the_same_width(self, other, coefficient):
         
@@ -125,15 +126,48 @@ class BoundingBox(object):
             return True
         return False
     
-    def is_contained_within_self(self, other):
+    def is_contained_within_self(self, other, percent=100):
         
-        if not self.point_within_self(other.x1, other.y1):
+        if percent == 100:
+        
+            if not self.point_within_self(other.x1, other.y1):
+                return False
+            if not self.point_within_self(other.x2, other.y2):
+                return False
+        
+        if other.x1 >= self.x1 and other.x1 <= self.x2:
+            intersection_x1 = other.x1
+        elif other.x1 < self.x1 and other.x2 >= self.x1:
+            intersection_x1 = self.x1
+        else:
             return False
-        if not self.point_within_self(other.x2, other.y2):
+        if other.x2 <= self.x2 and other.x2 >= self.x1:
+            intersection_x2 = other.x2
+        elif other.x2 > self.x2 and other.x1 <= self.x2:
+            intersection_x2 = self.x2
+        else:
+            return False
+        if other.y1 >= self.y1 and other.y1 <= self.y2:
+            intersection_y1 = other.y1
+        elif other.y1 < self.y1 and other.y2 >= self.y1:
+            intersection_y1 = self.y1
+        else:
+            return False
+        if other.y2 <= self.y2 and other.y2 >= self.y1:
+            intersection_y2 = other.y2
+        elif other.y2 > self.y2 and other.y1 <= self.y2:
+            intersection_y2 = self.y2
+        else:
             return False
         
-        return True
+        width = intersection_x2 - intersection_x1 + 1
+        height = intersection_y2 - intersection_y1 + 1
+        assert(width >= 0)
+        assert(height >= 0)
+        intersection_size = width * height
+        percent_overlap = round(intersection_size * 100.0 / other.size)
         
+        return percent_overlap > percent    
 
     def point_within_self(self, x, y):
         
@@ -171,13 +205,7 @@ class BoundingBox(object):
         return "(%d,%d|%d,%d)" % (self.x1, self.y1, self.x2, self.y2)
 
     def __eq__(self, other):
-        """
-        This is slightly inconsistent - this operator is
-        more exact than the other comparison operators, but it
-        makes sense: The others are primarily for sorting while
-        this is really for seeing if we have the same segment         
-        """
-        
+       
         return self.x1 == other.x1 and \
             self.x2 == other.x2 and \
             self.y1 == other.y1 and \
@@ -216,8 +244,8 @@ class ObjectWithBoundingBox(object):
     def __init__(self, bounding_box):
         
         self.bounding_box = bounding_box
-        self.y_tolerance = 20
-        self.x_tolerance = 5
+        self.y_tolerance = 40
+        self.x_tolerance = 15
 
     def merge(self, other):
 
@@ -279,7 +307,8 @@ class Segment(ObjectWithBoundingBox):
     def merge(self, other):
         
         super().merge(other)
-        self.segment_type = SegmentType.UNKNOWN
+        if other.segment_type != self.segment_type:
+            self.segment_type = SegmentType.UNKNOWN
         
         
 class SegmentedPage(object):
