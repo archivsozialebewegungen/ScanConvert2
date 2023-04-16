@@ -31,7 +31,7 @@ class SegmentClassificationService(object):
         
         return segmented_page
 
-    def _classify_segment(self, segment: Segment, img: Image):
+    def _classify_segment_unfinished(self, segment: Segment, img: Image):
 
         if segment.segment_type != SegmentType.UNKNOWN:
             return segment.segment_type
@@ -52,7 +52,7 @@ class SegmentClassificationService(object):
 
         return SegmentType.DRAWING
 
-    def _classify_segment_brute_force(self, segment: Segment, img: Image):
+    def _classify_segment(self, segment: Segment, img: Image):
 
         if segment.segment_type != SegmentType.UNKNOWN:
             return segment.segment_type

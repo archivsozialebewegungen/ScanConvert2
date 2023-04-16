@@ -16,6 +16,7 @@ from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorith
 from Asb.ScanConvert2.PageSegmentationModule.SegmentSorter import SegmentSorterService
 import numpy as np
 from Asb.ScanConvert2.PageSegmentationModule.SegmentClassification import SegmentClassificationService
+from Asb.ScanConvert2.PageSegmentationModule.OrientationDetector import OrientationDetectionService
 
 
 class SimpleSegment(Segment):
@@ -84,7 +85,8 @@ class SimpleSegmentationService(object):
                  classification_service: SegmentClassificationService,
                  run_length_algorithm_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService,
-                 ndarray_service: NdArrayService):
+                 ndarray_service: NdArrayService,
+                 orientation_service: OrientationDetectionService):
         '''
         Constructor
         '''
@@ -94,9 +96,13 @@ class SimpleSegmentationService(object):
         self.run_length_algorithm_service = run_length_algorithm_service
         self.binarization_service = binarization_service
         self.ndarray_service = ndarray_service
+        self.orientation_service = orientation_service
         self.skip_line_detection = False
         
     def get_segmented_page(self, img: Image):
+        
+        print("Step 0")
+        img = self.orientation_service.correct_orientation(img)
         
         print("Step 1")
         # Step 1: Binarization
