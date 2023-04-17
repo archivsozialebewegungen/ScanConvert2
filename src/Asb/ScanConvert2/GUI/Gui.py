@@ -23,7 +23,6 @@ from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
 from Asb.ScanConvert2.GUI.PageView import PageView
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
-from Asb.ScanConvert2.PageSegmentation import SegmentationService
 from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region, Page, NoPagesInProjectException, \
@@ -89,8 +88,7 @@ class Window(QMainWindow):
     def __init__(self,
                  project_service: ProjectService,
                  task_manager: TaskManager,
-                 previewer: FehPreviewer,
-                 photo_detector: SegmentationService):
+                 previewer: FehPreviewer):
 
         super().__init__()
         
@@ -98,7 +96,6 @@ class Window(QMainWindow):
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
         self.previewer = previewer
-        self.photo_detector = photo_detector
         self.metadata_dialog = MetadataDialog(self)
         self.properties_dialog = PropertiesDialog(self)
         
@@ -285,11 +282,11 @@ class Window(QMainWindow):
         self.new_region_button.clicked.connect(self.create_save_region)
         self.delete_region_button = QPushButton(text="Region löschen")
         self.delete_region_button.clicked.connect(self.delete_cancel_region)
-        self.mark_photos_button = QPushButton(text="Photos markieren")
-        self.mark_photos_button.clicked.connect(self.mark_photos)
+        #self.mark_photos_button = QPushButton(text="Photos markieren")
+        #self.mark_photos_button.clicked.connect(self.mark_photos)
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
-        page_view_buttons_layout.addWidget(self.mark_photos_button)
+        #page_view_buttons_layout.addWidget(self.mark_photos_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
@@ -321,6 +318,11 @@ class Window(QMainWindow):
         pdf_export_action.setShortcut('Ctrl+P')
         pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
         pdf_export_action.triggered.connect(self.cb_export_pdf)
+
+        pdf_export_action = QAction('&Automatischer Pdf Export', self)
+        pdf_export_action.setShortcut('Ctrl+A')
+        pdf_export_action.setStatusTip('Das Projekt mit eigener Segmentierung als pdf-Datei exportieren')
+        pdf_export_action.triggered.connect(self.cb_auto_export_pdf)
 
         tif_export_action = QAction(QIcon('file.png'), '&Tiff-Archiv exportieren', self)
         tif_export_action.setShortcut('Ctrl+T')
@@ -421,6 +423,23 @@ class Window(QMainWindow):
             job = JobDefinition(
                 self,
                 lambda: self.project_service.export_pdf(self.project, file_name[0])
+            )
+            self.task_manager.add_task(job)
+            
+    def cb_auto_export_pdf(self):
+        
+        if not self.project.metadata.reviewed:
+            self.cb_edit_metadata()
+        
+        file_name = QFileDialog.getSaveFileName(parent=self,
+                                                dir=self.project.proposed_pdf_file,
+                                                caption="Pdf-Datei für das Speichern angeben",
+                                                filter="Pdf-Dateien (*.pdf)")
+
+        if file_name[0] != "":
+            job = JobDefinition(
+                self,
+                lambda: self.project_service.auto_export_pdf(self.project, file_name[0])
             )
             self.task_manager.add_task(job)
             

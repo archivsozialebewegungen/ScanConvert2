@@ -5,6 +5,7 @@ Created on 07.04.2023
 '''
 from Asb.ScanConvert2.PageSegmentationModule.Domain import ObjectWithBoundingBox,\
     Segment
+from injector import singleton
 
 class Block(ObjectWithBoundingBox):
 
@@ -28,6 +29,7 @@ class Block(ObjectWithBoundingBox):
                 segments.append(bb_object)
         return segments
 
+@singleton
 class SegmentSorterService(object):
 
     def sort_segments(self, segments):

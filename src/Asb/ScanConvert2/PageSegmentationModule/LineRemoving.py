@@ -13,6 +13,7 @@ from Asb.ScanConvert2.PageSegmentationModule.Domain import BoundingBox, \
 import numpy as np
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService,\
     NdArrayService
+from injector import inject, singleton
 
 def value_or_none(contour_id):
     
@@ -86,12 +87,14 @@ class Contour(object):
 
     eccentricity = property(lambda self: self.rectangle.eccentricity)
 
+@singleton
 class LineRemovingService(object):
     '''
     classdocs
     '''
 
 
+    @inject
     def __init__(self, run_length_algorithm_service: RunLengthAlgorithmService,
                  ndarray_service: NdArrayService):
         

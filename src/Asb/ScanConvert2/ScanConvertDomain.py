@@ -10,6 +10,7 @@ from PIL import Image
 from Asb.ScanConvert2.Algorithms import Algorithm
 import os
 import re
+from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage
 
 
 class Mode(Enum):
@@ -275,12 +276,45 @@ class Page:
         if len(self.sub_regions) == 0:
             raise NoRegionsOnPageException()
         return len(self.sub_regions)
+    
+    def _get_source_resolution(self):
+        
+        return self.scan.resolution
         
     main_algorithm = property(lambda self: self.main_region.mode_algorithm)
     final_rotation_angle = property(_get_final_rotation_angle)
     current_sub_region = property(_get_current_region)
     no_of_sub_regions = property(_get_number_of_sub_regions)
-    source_resolution = property(lambda self: self.scan.resolution)
+    source_resolution = property(lambda self: self._get_source_resolution())
+
+class SegmentedPagePage(Page):
+    
+    def __init__(self, segmented_page: SegmentedPage):
+        
+        self.segmented_page = segmented_page
+        main_region = Region(0, 0,
+                             segmented_page.original_img.width, segmented_page.original_img.height,
+                             Algorithm.OTSU)
+        super().__init__(None, main_region, 0)
+        self._create_regions(self.segmented_page)
+    
+    def get_raw_image(self):
+        
+        return self.segmented_page.original_img
+    
+    def _get_source_resolution(self):
+        
+        return get_image_resolution(self.segmented_page.original_img)
+
+    def _create_regions(self, segmented_page):
+        
+        for photo_segment in segmented_page.photo_segments:
+            
+            region = Region(photo_segment.bounding_box.x1,
+                            photo_segment.bounding_box.y1,
+                            photo_segment.width,
+                            photo_segment.height, Algorithm.FLOYD_STEINBERG)
+            self.add_region(region)
     
 class MetaData(object):
     

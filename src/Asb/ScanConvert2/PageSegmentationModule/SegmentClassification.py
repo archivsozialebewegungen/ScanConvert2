@@ -10,14 +10,16 @@ from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
 from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorithmService, \
     BinarizationService
 import numpy as np
+from injector import singleton, inject
 
 
+@singleton
 class SegmentClassificationService(object):
     '''
     A service to classify segments according to their type.
     '''
 
-
+    @inject
     def __init__(self, run_length_algorithm_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService):
 

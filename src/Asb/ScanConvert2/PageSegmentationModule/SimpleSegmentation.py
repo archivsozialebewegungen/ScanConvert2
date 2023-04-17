@@ -7,7 +7,7 @@ import math
 
 from PIL import Image
 import cv2
-from injector import inject
+from injector import inject, singleton
 from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage, \
     Segment, BoundingBox, SegmentType
 from Asb.ScanConvert2.PageSegmentationModule.LineRemoving import LineRemovingService
@@ -53,7 +53,8 @@ class SimpleSegment(Segment):
             return True
         
         return False
-        
+
+@singleton        
 class SimpleSegmentationService(object):
     '''
     This mixes some ideas from Pavlidis / Zhou 1992 with some of my own.
@@ -130,7 +131,7 @@ class SimpleSegmentationService(object):
             img = img.rotate(angle, expand=True, fillcolor="white")
             bin_ndarray = self.binarization_service.binarize_otsu(img)
             if not self.skip_line_detection:
-                bin_ndarray, border_segments = self.line_removing_service.remove_lines(bin_ndarray)
+                bin_ndarray, _ = self.line_removing_service.remove_lines(bin_ndarray)
         
         rotated_rectangles = self._calculate_rotated_rectangles(bin_ndarray)
         

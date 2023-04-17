@@ -22,8 +22,12 @@ from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm,\
     AlgorithmHelper, TooManyColors, RGB_WHITE
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
-from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
+from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region,\
+    SegmentedPagePage, get_image_resolution
 from fitz.fitz import Document
+from Asb.ScanConvert2.PageSegmentationModule.SimpleSegmentation import SimpleSegmentationService
+from Asb.ScanConvert2.PageSegmentationModule.Domain import SegmentedPage
+from Asb.ScanConvert2.PageSegmentationModule.Operations import BinarizationService
 
 
 INVISIBLE = 3
@@ -36,20 +40,39 @@ class OCRService(object):
     '''
     
     @inject
-    def __init__(self, ocr_runner: OcrRunner):
+    def __init__(self, ocr_runner: OcrRunner, binarization_service: BinarizationService):
         
         self.ocr_runner = ocr_runner
+        self.binarization_service = binarization_service
     
-    def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas, lang: str) -> Canvas:
+    def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas, lang: str, offset=(0,0)) -> Canvas:
         
         page = self.ocr_runner.run_tesseract(img, lang)
+
+        pdf_offset = (
+            offset[0] * 72.0 / page.dpi,
+            offset[1] * 72.0 / page.dpi
+            )
         
         for line in page.lines:
-            pdf = self._write_line(line, pdf, page)
+            pdf = self._write_line(line, pdf, page, pdf_offset)
 
         return pdf
+
+    def add_ocrresult_from_segmentation(self, segmented_page: SegmentedPage, pdf: Canvas, lang: str) -> Canvas:
+        
+        for segment in segmented_page.text_segments:
+            img_segment = segmented_page.original_img.crop(segment.coordinates)
+            bin_segment = self.binarization_service.binarize_otsu(img_segment)
+            resolution = get_image_resolution(img_segment)
+            img_segment = Image.fromarray(bin_segment)
+            img_segment.info['dpi'] = (resolution, resolution)
+            offset = (segmented_page.original_img.width - segment.bounding_box.x1,
+                      segmented_page.original_img.height - segment.bounding_box.y1)
+            pdf = self.add_ocrresult_to_pdf(img_segment, pdf, lang, offset)
+        return pdf
     
-    def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
+    def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage, offset) -> Canvas:
 
         if line.textangle == 90:
             bbox_new = (line.bbox[3], -1*line.bbox[2], line.bbox[1], -1*line.bbox[0])
@@ -57,14 +80,14 @@ class OCRService(object):
             pdf.rotate(90)
             
         for word in line.words:
-            pdf = self._write_word(word, pdf, line, page)
+            pdf = self._write_word(word, pdf, line, page, offset)
         
         if line.textangle == 90:
             pdf.rotate(270)
             
         return pdf
     
-    def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
+    def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage, offset) -> Canvas:
 
         if line.textangle == 90:
             bbox_new = (word.bbox[3], -1*word.bbox[2], word.bbox[1], -1*word.bbox[0])
@@ -76,7 +99,7 @@ class OCRService(object):
         
         text.setTextRenderMode(INVISIBLE)
         text.setFont('Times-Roman', line.font_size)
-        text.setTextOrigin(text_origin[0], text_origin[1])
+        text.setTextOrigin(text_origin[0]+offset[0], text_origin[1]+offset[1])
         # Text an bounding box anpassen
         text_width = pdf.stringWidth(word.text, 'Times-Roman', line.font_size)
         if text_width != 0:
@@ -315,11 +338,13 @@ class PdfService:
     def __init__(self,
                  ocr_service: OCRService,
                  finishing_service: FinishingService,
-                 algorithm_helper: AlgorithmHelper):
+                 algorithm_helper: AlgorithmHelper,
+                 segmentation_service: SimpleSegmentationService):
 
         self.ocr_service = ocr_service
         self.finishing_service = finishing_service
         self.algorithm_helper = algorithm_helper
+        self.segmentation_service = segmentation_service
     
     def create_pdf_file(self, project: Project, filebase: str):
    
@@ -374,6 +399,62 @@ class PdfService:
             else:
                 shutil.copy(temp_file, self._get_file_name(filebase))
         
+    def auto_create_pdf_file(self, project: Project, filebase: str):
+   
+        bg_colors = []
+   
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = os.path.join(temp_dir, "output.pdf")
+            pdf = Canvas(temp_file, pageCompression=1)
+            pdf.setAuthor(project.metadata.author)
+            pdf.setCreator('Scan-Convert 2')
+            pdf.setTitle(project.metadata.title)
+            pdf.setKeywords(project.metadata.keywords)
+            pdf.setSubject(project.metadata.subject)
+        
+            page_counter = 0
+            for page in project.pages:
+                page_counter += 1
+                segmented_page = self._create_segmented_page(page)
+                page = SegmentedPagePage(segmented_page)
+                image, _ = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
+                width_in_dots, height_in_dots = image.size
+            
+                page_width = width_in_dots * 72 / project.project_properties.pdf_resolution
+                page_height = height_in_dots * 72 / project.project_properties.pdf_resolution
+            
+                pdf.setPageSize((width_in_dots * inch / project.project_properties.pdf_resolution,
+                                 height_in_dots * inch / project.project_properties.pdf_resolution))
+
+                img_stream = io.BytesIO()
+                #if image.mode == "1":
+                image.save(img_stream, format='png')
+                #else:
+                #image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
+                img_stream.seek(0)
+                img_reader = ImageReader(img_stream)
+                pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
+                if project.project_properties.run_ocr:
+                    pdf = self.ocr_service.add_ocrresult_from_segmentation(segmented_page, pdf, project.project_properties.ocr_lang)
+                pdf.showPage()
+        
+            pdf.save()
+            # Convert to pdfa and optimize graphics
+            if project.project_properties.create_pdfa:
+                #ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
+                ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
+                ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
+                document = Document(ocrmypdf_temp_file)
+                document.set_metadata(project.metadata.as_dict())
+                document.save(self._get_file_name(filebase))
+            else:
+                shutil.copy(temp_file, self._get_file_name(filebase))
+
+    def _create_segmented_page(self, page):
+        
+        img = page.get_raw_image()
+        return self.segmentation_service.get_segmented_page(img)
+
     def _get_file_name(self, filebase: str):
         
         if filebase[-4:] == ".pdf":
@@ -429,6 +510,15 @@ class ProjectService(object):
             self.save_project(file_name + ".scp", project)
             
         self.pdf_service.create_pdf_file(project, file_name)
+
+    def auto_export_pdf(self, project: Project, file_name: str):
+        
+        if file_name[-4:] == '.pdf':
+            self.save_project(file_name.replace("pdf", "scp"), project)
+        else:
+            self.save_project(file_name + ".scp", project)
+            
+        self.pdf_service.auto_create_pdf_file(project, file_name)
 
     def export_tif(self, project: Project, filename: str):
         

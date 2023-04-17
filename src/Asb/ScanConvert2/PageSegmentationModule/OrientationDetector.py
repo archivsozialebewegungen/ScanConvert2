@@ -6,22 +6,18 @@ Created on 16.04.2023
 import pytesseract
 from pytesseract.pytesseract import Output
 from PIL import Image
+from injector import singleton
 
 rotations = {90: Image.ROTATE_90,
              180: Image.ROTATE_180,
              270: Image.ROTATE_270}
 
+@singleton
 class OrientationDetectionService(object):
     '''
     classdocs
     '''
 
-
-    def __init__(self):
-        '''
-        Constructor
-        '''
-        pass
     
     def correct_orientation(self, img):
         
