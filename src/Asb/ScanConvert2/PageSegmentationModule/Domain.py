@@ -112,19 +112,7 @@ class BoundingBox(object):
 
     def intersects_with(self, other):
         
-        if other.is_contained_within_self(self):
-            return True
-        if self.is_contained_within_self(other):
-            return True
-        if self.point_within_self(other.x1, other.y1):
-            return True
-        if self.point_within_self(other.x1, other.y2):
-            return True
-        if self.point_within_self(other.x2, other.y1):
-            return True
-        if self.point_within_self(other.x2, other.y2):
-            return True
-        return False
+        return not (self.x2 < other.x1 or other.x2 < self.x1 or self.y2 < other.y1 or other.y2 < self.y1)
     
     def is_contained_within_self(self, other, percent=100):
         

@@ -71,13 +71,13 @@ class OcrRunner(object):
         self.re_textangle = re.compile(r'.*textangle\s+([0-9-.]+)\s*;.*')
     
 
-    def run_tesseract(self, img: Image, lang: str) -> OCRPage:
+    def run_tesseract(self, img: Image, lang: str, psm: str=3) -> OCRPage:
         '''
         This is the only public method. It executes OCR on the given image and
         returns the information in a page object.
         '''
 
-        hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang=lang)
+        hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang=lang, config="--psm %d" % psm)
         dom = parseString(hocr)
         page = OCRPage(img.info['dpi'][0])
         page.width = img.size[0]

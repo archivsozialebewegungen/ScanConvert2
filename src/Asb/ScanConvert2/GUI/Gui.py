@@ -319,10 +319,10 @@ class Window(QMainWindow):
         pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
         pdf_export_action.triggered.connect(self.cb_export_pdf)
 
-        pdf_export_action = QAction('&Automatischer Pdf Export', self)
-        pdf_export_action.setShortcut('Ctrl+A')
-        pdf_export_action.setStatusTip('Das Projekt mit eigener Segmentierung als pdf-Datei exportieren')
-        pdf_export_action.triggered.connect(self.cb_auto_export_pdf)
+        auto_pdf_export_action = QAction('&Automatischer Pdf Export', self)
+        auto_pdf_export_action.setShortcut('Ctrl+A')
+        auto_pdf_export_action.setStatusTip('Das Projekt mit eigener Segmentierung als pdf-Datei exportieren')
+        auto_pdf_export_action.triggered.connect(self.cb_auto_export_pdf)
 
         tif_export_action = QAction(QIcon('file.png'), '&Tiff-Archiv exportieren', self)
         tif_export_action.setShortcut('Ctrl+T')
@@ -333,14 +333,11 @@ class Window(QMainWindow):
         edit_metadata_action.setShortcut('Ctrl+M')
         edit_metadata_action.setStatusTip('Metadaten bearbeiten')
         edit_metadata_action.triggered.connect(self.cb_edit_metadata)
+
         edit_properties_action = QAction(QIcon('file.png'), '&Einstellungen', self)
         edit_properties_action.setShortcut('Ctrl+E')
         edit_properties_action.setStatusTip('Projekteinstellungen bearbeiten')
         edit_properties_action.triggered.connect(self.cb_edit_properties)
-        edit_properties_action = QAction(QIcon('file.png'), 'P&otos erkennen', self)
-        edit_properties_action.setShortcut('Ctrl+E')
-        edit_properties_action.setStatusTip('Alle Photos im Projekt erkennen und als Regionen markieren')
-        edit_properties_action.triggered.connect(self.cb_detect_photos)
 
         menubar = self.menuBar()
         fileMenu = menubar.addMenu('&Datei')
@@ -350,6 +347,7 @@ class Window(QMainWindow):
         fileMenu.addAction(exit_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
+        exportMenu.addAction(auto_pdf_export_action)
         exportMenu.addAction(tif_export_action)
         exportMenu.addAction(edit_metadata_action)
         exportMenu.addAction(edit_properties_action)

@@ -29,8 +29,10 @@ class OrientationDetectionService(object):
         
     def _determine_correction(self, img):
         
-        orientation = pytesseract.image_to_osd(img, output_type=Output.DICT)
-        # I really do not understand this, but obviously "orientation" and "rotate"
+        try:
+            orientation = pytesseract.image_to_osd(img, output_type=Output.DICT)
+        except:
+            return 0
         return orientation["orientation"]
         
         

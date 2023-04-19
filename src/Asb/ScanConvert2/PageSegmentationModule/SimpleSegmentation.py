@@ -169,7 +169,11 @@ class SimpleSegmentationService(object):
         segmented_page = self._remove_small_illustrations(segmented_page)
 
         print("Step 13")
+        no_of_segments = len(segmented_page.segments)
         segmented_page = self._merge_text_segments_into_columns(segmented_page)
+        while len(segmented_page.segments) < no_of_segments:
+            no_of_segments = len(segmented_page.segments)
+            segmented_page = self._merge_text_segments_into_columns(segmented_page)
         
         print("Step 14")
         segmented_page.segments = self.sorter.sort_segments(segmented_page.segments)
@@ -206,6 +210,7 @@ class SimpleSegmentationService(object):
     
     def _merge_text_segments_into_columns(self, segmented_page):
 
+        segmented_page.show_segments()
         new_segment_list = []
         segmented_page.segments.sort()
         while len(segmented_page.segments) > 0:
@@ -213,27 +218,28 @@ class SimpleSegmentationService(object):
             new_segment_list.append(current_segment)
             if current_segment.segment_type != SegmentType.TEXT:
                 continue
-            mergable_segment = self._find_mergable_text_segment(current_segment, new_segment_list + segmented_page.segments)
+            mergable_segment = self._find_mergable_text_segment(current_segment, segmented_page.segments, new_segment_list)
             while mergable_segment is not None:
                 current_segment.merge(mergable_segment)
                 segmented_page.segments.remove(mergable_segment)
-                mergable_segment = self._find_mergable_text_segment(current_segment, new_segment_list + segmented_page.segments)
+                mergable_segment = self._find_mergable_text_segment(current_segment, segmented_page.segments, new_segment_list)
         
         segmented_page.segments = new_segment_list
-        
+        segmented_page.show_segments()
         return segmented_page
     
-    def _find_mergable_text_segment(self, current, segments):
+    def _find_mergable_text_segment(self, current, unprocessed_segments, processed_segments):
         
-        for segment in segments:
+        for segment in unprocessed_segments:
             if segment.segment_type != SegmentType.TEXT:
                 continue
             if segment == current:
+                assert(False)
                 continue
             if (not segment.bounding_box.is_horizontally_contained_in(current.bounding_box, 10)) and \
                 (not current.bounding_box.is_horizontally_contained_in(segment.bounding_box, 10)):
                 continue
-            if self._are_mergable_without_collision(current, segment, segments):
+            if self._are_mergable_without_collision(current, segment, unprocessed_segments + processed_segments):
                 return segment
         return None
         
@@ -246,6 +252,8 @@ class SimpleSegmentationService(object):
             if segment == segment1 or segment == segment2:
                 continue
             if test_bounding_box.intersects_with(segment.bounding_box):
+                return False
+            if segment.bounding_box.intersects_with(test_bounding_box):
                 return False
         return True
     
@@ -320,7 +328,7 @@ class SimpleSegmentationService(object):
     
     def _calculate_rotated_rectangles(self, bin_ndarray):
 
-        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 40)
+        smeared_ndarray = self.run_length_algorithm_service.smear_horizontal(bin_ndarray, 25)
         smeared_ndarray_gray = self.ndarray_service.convert_binary_to_inverted_gray(smeared_ndarray)
         contours, _ = cv2.findContours(smeared_ndarray_gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -370,7 +378,9 @@ class SimpleSegmentationService(object):
         else:
             angle1 = np.average(max1)
             angle2 = np.average(max2)
-            assert(abs(abs(angle1 - angle2) - 90.0) < 2.0)
+            if abs(abs(angle1 - angle2) - 90.0) > 2.0:
+                # These are not meaningful values
+                return 0.0
             if abs(angle1) < abs(angle2):
                 angle = angle1
             else:

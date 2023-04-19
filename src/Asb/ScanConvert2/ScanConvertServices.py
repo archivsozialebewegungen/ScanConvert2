@@ -47,7 +47,12 @@ class OCRService(object):
     
     def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas, lang: str, offset=(0,0)) -> Canvas:
         
-        page = self.ocr_runner.run_tesseract(img, lang)
+        
+        if offset == (0,0):
+            page = self.ocr_runner.run_tesseract(img, lang)
+        else:
+            page = self.ocr_runner.run_tesseract(img, lang, psm=6)
+        
 
         pdf_offset = (
             offset[0] * 72.0 / page.dpi,
@@ -67,11 +72,17 @@ class OCRService(object):
             resolution = get_image_resolution(img_segment)
             img_segment = Image.fromarray(bin_segment)
             img_segment.info['dpi'] = (resolution, resolution)
-            offset = (segmented_page.original_img.width - segment.bounding_box.x1,
-                      segmented_page.original_img.height - segment.bounding_box.y1)
+            offset = self._calculate_segment_offset(segment, segmented_page.original_img)
             pdf = self.add_ocrresult_to_pdf(img_segment, pdf, lang, offset)
         return pdf
     
+    def _calculate_segment_offset(self, segment, img):
+    
+        x1 = segment.bounding_box.x1
+        y2 = segment.bounding_box.y2
+        
+        return (x1, img.height - y2)
+        
     def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage, offset) -> Canvas:
 
         if line.textangle == 90:
