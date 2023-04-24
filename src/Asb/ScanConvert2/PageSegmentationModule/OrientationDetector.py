@@ -13,7 +13,7 @@ rotations = {90: Image.ROTATE_90,
              270: Image.ROTATE_270}
 
 @singleton
-class OrientationDetectionService(object):
+class OrientationCorrectionService(object):
     '''
     classdocs
     '''

@@ -16,7 +16,7 @@ from Asb.ScanConvert2.PageSegmentationModule.Operations import RunLengthAlgorith
 from Asb.ScanConvert2.PageSegmentationModule.SegmentSorter import SegmentSorterService
 import numpy as np
 from Asb.ScanConvert2.PageSegmentationModule.SegmentClassification import SegmentClassificationService
-from Asb.ScanConvert2.PageSegmentationModule.OrientationDetector import OrientationDetectionService
+from Asb.ScanConvert2.PageSegmentationModule.OrientationDetector import OrientationCorrectionService
 
 
 class SimpleSegment(Segment):
@@ -87,7 +87,7 @@ class SimpleSegmentationService(object):
                  run_length_algorithm_service: RunLengthAlgorithmService,
                  binarization_service: BinarizationService,
                  ndarray_service: NdArrayService,
-                 orientation_service: OrientationDetectionService):
+                 orientation_service: OrientationCorrectionService):
         '''
         Constructor
         '''
