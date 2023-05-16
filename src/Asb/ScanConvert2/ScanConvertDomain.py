@@ -238,6 +238,15 @@ class Page:
     def add_region(self, region: Region):
         
         self.sub_regions.append(region)
+        
+    def crop_page(self, region: Region):
+        # TODO: Rotation angle berücksichtigen
+        old_x = self.main_region.x
+        old_y = self.main_region.y
+        self.main_region.x = old_x + region.x
+        self.main_region.y = old_y + region.y
+        self.main_region.width = region.width
+        self.main_region.height = region.height
     
     def _rotate_image(self, img: Image, angle: int) -> Image:
         '''
