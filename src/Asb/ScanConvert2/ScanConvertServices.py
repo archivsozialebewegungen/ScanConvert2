@@ -433,3 +433,7 @@ class ProjectService(object):
     def export_tif(self, project: Project, filename: str):
         
         self.tiff_service.create_tiff_file_archive(project, filename)
+
+    def export_ddf(self, project: Project, filename: str):
+        
+        self.tiff_service.create_tiff_file_archive(project, filename)

@@ -323,6 +323,11 @@ class Window(QMainWindow):
         pdf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
         pdf_export_action.triggered.connect(self.cb_export_pdf)
 
+        ddf_export_action = QAction(QIcon('file.png'), '&DDF-Export', self)
+        ddf_export_action.setShortcut('Ctrl+D')
+        ddf_export_action.setStatusTip('Das Projekt als pdf-Datei exportieren')
+        ddf_export_action.triggered.connect(self.cb_export_ddf)
+
         tif_export_action = QAction(QIcon('file.png'), '&Tiff-Archiv exportieren', self)
         tif_export_action.setShortcut('Ctrl+T')
         tif_export_action.setStatusTip('Das Projekt als Tiff-Archiv exportieren')
@@ -410,6 +415,26 @@ class Window(QMainWindow):
             )
             self.task_manager.add_task(job)
             
+    def cb_export_ddf(self):
+        
+        if not self.project.metadata.reviewed:
+            self.project.metadata.subject = "Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend"
+            self.cb_edit_metadata()
+        
+
+        
+        file_name = QFileDialog.getSaveFileName(parent=self,
+                                                dir=self.project.proposed_zip_file,
+                                                caption="Zip-Datei für das Speichern angeben",
+                                                filter="Zip-Dateien (*.zip)")
+
+        if file_name[0] != "":
+            job = JobDefinition(
+                self,
+                lambda: self.project_service.export_ddf(self.project, file_name[0])
+            )
+            self.task_manager.add_task(job)
+
     def cb_export_tif(self):
         
         if not self.project.metadata.reviewed:
