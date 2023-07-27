@@ -38,6 +38,7 @@ DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
 CROP_REGION = "Freistellen"
 
+Image.MAX_IMAGE_PIXELS = None 
 
 @singleton
 class FehPreviewer(object):
