@@ -304,9 +304,15 @@ class NoPagesInProjectException(Exception):
 class Project(object):
     
     def __init__(self,
-                 pages: []):
+                 scans: [],
+                 pages: [],
+                 rotation: 0,
+                 rotation_alternating: False):
 
+        self.scans = scans
         self.pages = pages
+        self.rotation = rotation
+        self.rotation_alternating = rotation_alternating
         self.metadata = MetaData()
         self.current_page_no = None
         self.project_properties = ProjectProperties()

@@ -24,6 +24,8 @@ from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
 from fitz.fitz import Document
+from exiftool.exiftool import ExifTool
+from exiftool.helper import ExifToolHelper
 
 
 INVISIBLE = 3
@@ -307,6 +309,18 @@ class TiffService(object):
         for utf8, ascii_string in self.replacements.items():
             string = string.replace(utf8, ascii_string)
         return string
+    
+@singleton
+class DDFService:
+    
+    @inject
+    def __init__(self):
+        
+        pass
+    
+    def create_ddf_file_archive(self, project: Project, filebase):
+        
+        zipfile = ZipFile(self._get_file_name(filebase), mode='w')
 
 @singleton
 class PdfService:
@@ -379,6 +393,21 @@ class PdfService:
         if filebase[-4:] == ".pdf":
             return filebase
         return filebase + ".pdf"
+
+@singleton
+class IPTCService(object):
+    
+    def write_iptc_tags(self, filename, tags):
+        
+        with ExifToolHelper() as exif_tool:
+            exif_tool.set_tags([filename], tags, ["-P", "-overwrite_original"])
+            
+    def read_iptc_tags(self, filename):
+        
+        with ExifToolHelper() as exif_tool:
+            meta_data = exif_tool.get_meatadata(filename)
+            
+        return meta_data            
 
 @singleton    
 class ProjectService(object):

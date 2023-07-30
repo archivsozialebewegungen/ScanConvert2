@@ -58,7 +58,7 @@ class PagesGenerator(object):
     with a duplex feeder). 
     '''
     
-    alternating_rotation = {
+    rotation_alternating = {
             0: 180,
             90: 270,
             180: 0,
@@ -127,7 +127,7 @@ class PagesGenerator(object):
                     pages.append(self._get_right(scan, 180))
                     pages.append(self._get_left(scan, 180))
             if alternating:
-                next_rotation = self.alternating_rotation[next_rotation]
+                next_rotation = self.rotation_alternating[next_rotation]
         return pages
 
     def _90_degrees_region_rotation(self, scans: [], alternating: bool):
@@ -148,7 +148,7 @@ class PagesGenerator(object):
                     pages.append(self._get_top(scan, 270))
                     pages.append(self._get_bottom(scan, 270))
             if alternating:
-                next_rotation = self.alternating_rotation[next_rotation]
+                next_rotation = self.rotation_alternating[next_rotation]
         return pages
 
     def _180_degrees_region_rotation(self, scans: [], alternating: bool):
@@ -169,7 +169,7 @@ class PagesGenerator(object):
                     pages.append(self._get_left(scan, 0))
                     pages.append(self._get_right(scan, 0))
             if alternating:
-                next_rotation = self.alternating_rotation[next_rotation]
+                next_rotation = self.rotation_alternating[next_rotation]
         return pages
 
     def _270_degrees_region_rotation(self, scans: [], alternating: bool):
@@ -190,7 +190,7 @@ class PagesGenerator(object):
                     pages.append(self._get_bottom(scan, 90))
                     pages.append(self._get_top(scan, 90))
             if alternating:
-                next_rotation = self.alternating_rotation[next_rotation]
+                next_rotation = self.rotation_alternating[next_rotation]
         return pages
 
 @singleton    
@@ -264,4 +264,4 @@ class ProjectGenerator():
                     scan_rotation,
                     rotation_alternating)
         
-        return Project(self.page_sorter.sort_pages(pages, sort_type))
+        return Project(scans, self.page_sorter.sort_pages(pages, sort_type), scan_rotation, rotation_alternating)

@@ -351,6 +351,7 @@ class Window(QMainWindow):
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(pdf_export_action)
         exportMenu.addAction(tif_export_action)
+        exportMenu.addAction(ddf_export_action)
         exportMenu.addAction(edit_metadata_action)
         exportMenu.addAction(edit_properties_action)
     
