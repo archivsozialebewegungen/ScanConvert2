@@ -38,7 +38,9 @@ CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
+CROP_REGION = "Freistellen"
 
+Image.MAX_IMAGE_PIXELS = None 
 
 @singleton
 class FehPreviewer(object):
@@ -289,11 +291,11 @@ class Window(QMainWindow):
         self.new_region_button.clicked.connect(self.create_save_region)
         self.delete_region_button = QPushButton(text="Region löschen")
         self.delete_region_button.clicked.connect(self.delete_cancel_region)
-        self.mark_photos_button = QPushButton(text="Photos markieren")
-        self.mark_photos_button.clicked.connect(self.mark_photos)
+        self.crop_region_button = QPushButton(text=CROP_REGION)
+        self.crop_region_button.clicked.connect(self.crop_region)
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
-        page_view_buttons_layout.addWidget(self.mark_photos_button)
+        page_view_buttons_layout.addWidget(self.crop_region_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
@@ -610,13 +612,13 @@ class Window(QMainWindow):
         if page == self.current_page:
             self.show_page()
     
-    def mark_photos(self):
+    def crop_region(self):
         
-        job_definition = JobDefinition(
-            self,
-            lambda: self.run_photo_detection(self.current_page)
-        )
-        self.task_manager.add_task(job_definition)
+        self.graphics_view.get_selected_region()
+        self.current_page.crop_page(self.graphics_view.get_selected_region())
+        self.graphics_view.reset_rubberband()
+        self.show_page()
+        
         
     def reset_region(self):
         
