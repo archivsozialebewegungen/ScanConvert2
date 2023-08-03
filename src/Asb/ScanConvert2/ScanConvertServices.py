@@ -10,7 +10,7 @@ import shutil
 import tempfile
 from zipfile import ZipFile
 
-from PIL import Image
+from PIL import Image, ImageColor
 from PIL.TiffImagePlugin import ImageFileDirectory_v2
 from injector import singleton, inject
 import ocrmypdf
@@ -18,7 +18,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
-from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm,\
+from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper, TooManyColors, RGB_WHITE
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
@@ -27,8 +27,27 @@ from fitz.fitz import Document
 from exiftool.exiftool import ExifTool
 from exiftool.helper import ExifToolHelper
 
-
 INVISIBLE = 3
+
+@singleton
+class IPTCService(object):
+    
+    SOURCE = "1IPTC:Source"
+    CITY = "1IPTC:City"
+    SPECIAL_INSTRUCTIONS = "1IPTC:SpecialInstructions"
+    CATALOG_SETS = "1IPTC:CatalogSets"
+    
+    def write_iptc_tags(self, filename, tags):
+        
+        with ExifToolHelper() as exif_tool:
+            exif_tool.set_tags([filename], tags, ["-P", "-overwrite_original"])
+            
+    def read_iptc_tags(self, filename):
+        
+        with ExifToolHelper() as exif_tool:
+            meta_data = exif_tool.get_meatadata(filename)
+            
+        return meta_data            
 
 @singleton
 class OCRService(object):
@@ -54,7 +73,7 @@ class OCRService(object):
     def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
 
         if line.textangle == 90:
-            bbox_new = (line.bbox[3], -1*line.bbox[2], line.bbox[1], -1*line.bbox[0])
+            bbox_new = (line.bbox[3], -1 * line.bbox[2], line.bbox[1], -1 * line.bbox[0])
             line.bbox = bbox_new
             pdf.rotate(90)
             
@@ -69,7 +88,7 @@ class OCRService(object):
     def _write_word(self, word: OCRWord, pdf: Canvas, line: OCRLine, page: OCRPage) -> Canvas:
 
         if line.textangle == 90:
-            bbox_new = (word.bbox[3], -1*word.bbox[2], word.bbox[1], -1*word.bbox[0])
+            bbox_new = (word.bbox[3], -1 * word.bbox[2], word.bbox[1], -1 * word.bbox[0])
             word.bbox = bbox_new
 
         text_origin = self._calculate_text_origin(word, line, page)
@@ -96,8 +115,8 @@ class OCRService(object):
         # Abweichung nicht mehr für den Wortmittelpunkt, sondern für die linke
         # Seite der bounding box berechnet werden.
         #
-        #rotation_angle = round(math.degrees(math.atan(abs(line.baseline_coefficients[0]))))
-        #if line.baseline_coefficients[0] > 0:
+        # rotation_angle = round(math.degrees(math.atan(abs(line.baseline_coefficients[0]))))
+        # if line.baseline_coefficients[0] > 0:
         #    rotation_angle *= -1
 
         pdf.drawText(text)
@@ -118,6 +137,7 @@ class OCRService(object):
             text_origin_y = (line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
         
         return (text_origin_x, text_origin_y)
+
         
 @singleton
 class FinishingService(object):
@@ -129,12 +149,12 @@ class FinishingService(object):
         self.algorithm_implementations = algorithm_implementations
         self.algorithm_helper = algorithm_helper
         
-    def create_scaled_image(self, page: Page, target_resolution: int) -> Image:
+    def create_scaled_image(self, scan_or_page, target_resolution: int) -> Image:
 
-        img = page.get_raw_image()
+        img = scan_or_page.get_raw_image()
 
-        if page.source_resolution != target_resolution:
-            img = self._change_resolution(img, target_resolution / page.source_resolution)
+        if scan_or_page.source_resolution != target_resolution:
+            img = self.change_resolution(img, target_resolution / scan_or_page.source_resolution)
             img.info['dpi'] = (target_resolution, target_resolution)
     
         return img
@@ -146,7 +166,7 @@ class FinishingService(object):
         target_source_ratio = 1.0        
         if page.source_resolution != target_resolution:
             target_source_ratio = target_resolution / page.source_resolution
-            img = self._change_resolution(img, target_source_ratio)
+            img = self.change_resolution(img, target_source_ratio)
         
         bg_img = img.convert("RGB")
         bg_img, bg_color = self.algorithm_implementations[page.main_region.mode_algorithm].transform(bg_img, None)
@@ -163,7 +183,7 @@ class FinishingService(object):
         target_source_ratio = 1.0        
         if page.source_resolution != target_resolution:
             target_source_ratio = target_resolution / page.source_resolution
-            img = self._change_resolution(img, target_source_ratio)
+            img = self.change_resolution(img, target_source_ratio)
         
         bg_img = img.convert("RGB")
         bg_img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(bg_img, None)
@@ -180,7 +200,7 @@ class FinishingService(object):
         bg_colors.append(bg_color)
         return bg_img, bg_color, bg_colors
 
-    def _change_resolution(self, img: Image, target_source_ratio: float) -> Image:
+    def change_resolution(self, img: Image, target_source_ratio: float) -> Image:
 
         current_width, current_height = img.size
         new_width = int(current_width * target_source_ratio)
@@ -190,7 +210,6 @@ class FinishingService(object):
         new_dpi = img.info['dpi'][0] * target_source_ratio
         resized_img.info['dpi'] = (new_dpi, new_dpi)
         return resized_img
-        
         
     def _apply_regions(self, regions: [], bg_img: Image, original_img: Image, bg_color: (), target_source_ratio: float) -> Image:
         
@@ -228,8 +247,8 @@ class FinishingService(object):
                 
         return self.algorithm_implementations[algorithm].get_bg_color(img, mode)
 
-@singleton
-class TiffService(object):
+
+class ExportService(object):
 
     replacements = {'Ä': 'Ae',
                     'Ö': 'Oe',
@@ -239,8 +258,7 @@ class TiffService(object):
                     'ö': 'oe',
                     'ü': 'ue'
                     }
-    
-        
+
     document_name_tag = 269
     page_name_tag = 285
     artist_tag = 315
@@ -250,6 +268,34 @@ class TiffService(object):
     inch_resolution_unit = 2
     image_description = 270
     
+    def _get_file_name(self, filebase: str, suffix: str):
+        
+        if filebase[-4:] == ".%s" % suffix:
+            return filebase
+        return filebase + ".%s" % suffix
+
+    def _build_tiff_metadata(self, project: Project):
+
+        tiff_meta_data = ImageFileDirectory_v2()
+        tiff_meta_data[self.artist_tag] = self.utf8_to_ascii(project.metadata.author)
+        tiff_meta_data[self.document_name_tag] = self.utf8_to_ascii(project.metadata.title)
+        tiff_meta_data[self.image_description] = self.utf8_to_ascii("%s\n\nSchlagworte: %s" % (project.metadata.subject, project.metadata.keywords))
+        tiff_meta_data[self.x_resolution] = project.project_properties.tif_resolution
+        tiff_meta_data[self.y_resolution] = project.project_properties.tif_resolution
+        tiff_meta_data[self.resolution_unit] = self.inch_resolution_unit
+        
+        return tiff_meta_data
+    
+    def utf8_to_ascii(self, string: str):
+        
+        for utf8, ascii_string in self.replacements.items():
+            string = string.replace(utf8, ascii_string)
+        return string
+
+
+@singleton
+class TiffService(ExportService):
+        
     @inject
     def __init__(self, finishing_service: FinishingService):
     
@@ -257,15 +303,8 @@ class TiffService(object):
         
     def create_tiff_file_archive(self, project: Project, filebase):
         
-        zipfile = ZipFile(self._get_file_name(filebase), mode='w')
-        
-        meta_data = ImageFileDirectory_v2()
-        meta_data[self.artist_tag] = self.utf8_to_ascii(project.metadata.author)
-        meta_data[self.document_name_tag] = self.utf8_to_ascii(project.metadata.title)
-        meta_data[self.image_description] = self.utf8_to_ascii("%s\n\nSchlagworte: %s" % (project.metadata.subject, project.metadata.keywords))
-        meta_data[self.x_resolution] = project.project_properties.tif_resolution
-        meta_data[self.y_resolution] = project.project_properties.tif_resolution
-        meta_data[self.resolution_unit] = self.inch_resolution_unit
+        zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
+        tiff_meta_data = self._build_tiff_metadata(project)
         
         with tempfile.TemporaryDirectory() as tempdir:
 
@@ -274,11 +313,11 @@ class TiffService(object):
             counter = 0
             for page in project.pages:
                 counter += 1
-                meta_data[self.page_name_tag] = "Seite %d von %d des Dokuments" % (counter, no_of_pages)
+                tiff_meta_data[self.page_name_tag] = "Seite %d von %d des Dokuments" % (counter, no_of_pages)
                 page_name = "Seite%04d.tif" % counter
                 file_name = os.path.join(tempdir, page_name)
                 img = self.finishing_service.create_scaled_image(page, project.project_properties.tif_resolution)
-                img.save(file_name, tiffinfo=meta_data, compression="tiff_lzw")
+                img.save(file_name, tiffinfo=tiff_meta_data, compression="tiff_lzw")
                 zipfile.write(file_name, page_name)
             
             readme_file = os.path.join(tempdir, "readme.txt")
@@ -298,29 +337,126 @@ class TiffService(object):
                 
             zipfile.close()
 
-    def _get_file_name(self, filebase: str):
-        
-        if filebase[-4:] == ".zip":
-            return filebase
-        return filebase + ".zip"
-    
-    def utf8_to_ascii(self, string: str):
-        
-        for utf8, ascii_string in self.replacements.items():
-            string = string.replace(utf8, ascii_string)
-        return string
-    
+
 @singleton
-class DDFService:
+class DDFService(ExportService):
     
     @inject
-    def __init__(self):
+    def __init__(self, finishing_service: FinishingService, iptc_service: IPTCService):
         
-        pass
+        self.finishing_service = finishing_service
+        self.iptc_service = iptc_service
     
     def create_ddf_file_archive(self, project: Project, filebase):
         
-        zipfile = ZipFile(self._get_file_name(filebase), mode='w')
+        zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
+        
+        
+        with tempfile.TemporaryDirectory() as tempdir:
+
+            self._write_scans(project, tempdir, zipfile)
+            self._write_pages(project, tempdir, zipfile)
+            
+        zipfile.close()
+        
+    def _write_scans(self, project, tempdir, zipfile):
+        
+            no_of_scans = len(project.pages)
+            file_prefix = project.metadata.ddf_prefix
+            tiff_meta_data = self._build_tiff_metadata(project)
+            tiff_meta_data[self.x_resolution] = 400
+            tiff_meta_data[self.y_resolution] = 400
+
+            iptc_tags = self._build_iptc_metadata(project)
+            
+            counter = 0
+            for scan in project.scans:
+                counter += 1
+                tiff_meta_data[self.page_name_tag] = "Scan %d von %d" % (counter, no_of_scans)
+                scan_file_name = "%s%05d.tif" % (file_prefix, counter)
+                file_name = os.path.join(tempdir, scan_file_name)
+                img = self.finishing_service.create_scaled_image(scan, 400)
+                transposition = self.get_transposition(project, counter)
+                if transposition is not None:
+                    img = img.transpose(transposition)
+                img = self.add_color_card(img)
+                img = self.add_black_border(img)
+                img.save(file_name, tiffinfo=tiff_meta_data, compression=None)
+                self.iptc_service.write_iptc_tags(file_name, iptc_tags)
+                zipfile.write(file_name, scan_file_name)
+
+    def _write_pages(self, project, tempdir, zipfile):
+        
+            no_of_pages = len(project.pages)
+            file_prefix = project.metadata.ddf_prefix
+            tiff_meta_data = self._build_tiff_metadata(project)
+            tiff_meta_data[self.x_resolution] = 400
+            tiff_meta_data[self.y_resolution] = 400
+            
+            iptc_tags = self._build_iptc_metadata(project)
+            
+            counter = 0
+            for page in project.pages:
+                counter += 1
+                tiff_meta_data[self.page_name_tag] = "Seite %d von %d" % (counter, no_of_pages)
+                scan_file_name = "%s%05d.jpg" % (file_prefix, counter)
+                file_name = os.path.join(tempdir, scan_file_name)
+                img = self.finishing_service.create_scaled_image(page, 300)
+                img.save(file_name, quality=95, optimize=True)
+                self.iptc_service.write_iptc_tags(file_name, iptc_tags)
+                zipfile.write(file_name, scan_file_name)
+        
+    def _build_iptc_metadata(self, project: Project):
+
+        return {self.iptc_service.SOURCE: project.metadata.source,
+                self.iptc_service.CATALOG_SETS: project.metadata.signatur,
+                self.iptc_service.CITY: project.metadata.city,
+                self.iptc_service.SPECIAL_INSTRUCTIONS: project.metadata.special_instructions}
+            
+    def get_transposition(self, project, scan_no):
+            
+        if project.rotation_alternating and scan_no % 2 == 1:
+            if project.rotation_angle == 0:
+                return Image.ROTATE_180
+            if project.rotation_angle == 90:
+                return Image.ROTATE_270
+            if project.rotation_angle == 180:
+                return None
+            if project.rotation_angle == 270:
+                return Image.ROTATE_90
+        else:
+            if project.rotation_angle == 0:
+                return None
+            if project.rotation_angle == 90:
+                return Image.ROTATE_90
+            if project.rotation_angle == 180:
+                return Image.ROTATE_180
+            if project.rotation_angle == 270:
+                return Image.ROTATE_270
+            
+    def add_color_card(self, img):
+        
+        color_card_filename = os.path.join(os.path.dirname(__file__), "Data", "Farbkarte.tif")
+        color_card = Image.open(color_card_filename)
+        color_card = self.finishing_service.change_resolution(color_card, float(img.info['dpi'][0]) / float(color_card.info['dpi'][0]))
+        
+        new_width = img.width + color_card.width
+        new_img = Image.new(img.mode, (new_width, img.height), ImageColor.getcolor("black", img.mode))
+        new_img.info['dpi'] = img.info['dpi']
+        new_img.paste(img, (0, 0))
+        new_img.paste(color_card, (img.width + 1, 0))
+        
+        return new_img
+            
+    def add_black_border(self, img):
+        
+        additional_pixels = int(img.info['dpi'][0] / 2.54)
+        new_width = img.width + additional_pixels
+        new_height = img.height + additional_pixels
+        new_img = Image.new(img.mode, (new_width, new_height), ImageColor.getcolor("black", img.mode))
+        new_img.paste(img, (int(additional_pixels/2), int(additional_pixels/2)))
+        return new_img
+
 
 @singleton
 class PdfService:
@@ -365,10 +501,10 @@ class PdfService:
                                  height_in_dots * inch / project.project_properties.pdf_resolution))
 
                 img_stream = io.BytesIO()
-                #if image.mode == "1":
+                # if image.mode == "1":
                 image.save(img_stream, format='png')
-                #else:
-                #image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
+                # else:
+                # image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
                 img_stream.seek(0)
                 img_reader = ImageReader(img_stream)
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
@@ -379,7 +515,7 @@ class PdfService:
             pdf.save()
             # Convert to pdfa and optimize graphics
             if project.project_properties.create_pdfa:
-                #ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
+                # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
                 ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
                 ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
                 document = Document(ocrmypdf_temp_file)
@@ -394,20 +530,7 @@ class PdfService:
             return filebase
         return filebase + ".pdf"
 
-@singleton
-class IPTCService(object):
-    
-    def write_iptc_tags(self, filename, tags):
-        
-        with ExifToolHelper() as exif_tool:
-            exif_tool.set_tags([filename], tags, ["-P", "-overwrite_original"])
-            
-    def read_iptc_tags(self, filename):
-        
-        with ExifToolHelper() as exif_tool:
-            meta_data = exif_tool.get_meatadata(filename)
-            
-        return meta_data            
+
 
 @singleton    
 class ProjectService(object):
@@ -416,10 +539,12 @@ class ProjectService(object):
     def __init__(self,
                  project_generator: ProjectGenerator,
                  pdf_service: PdfService,
+                 ddf_service: DDFService,
                  tiff_service: TiffService):
         
         self.project_generator = project_generator
         self.pdf_service = pdf_service
+        self.ddf_service = ddf_service
         self.tiff_service = tiff_service
         
     def create_project(self,
@@ -465,4 +590,4 @@ class ProjectService(object):
 
     def export_ddf(self, project: Project, filename: str):
         
-        self.tiff_service.create_tiff_file_archive(project, filename)
+        self.ddf_service.create_ddf_file_archive(project, filename)

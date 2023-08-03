@@ -18,19 +18,21 @@ from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
     QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox, \
     QButtonGroup, QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
+from networkx.algorithms.bipartite.projection import project
 
 from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
+from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog, \
+    DDFMetadataDialog
+from Asb.ScanConvert2.GUI.PageView import PageView
+from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
+from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
 from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Region, Page, NoPagesInProjectException, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
-from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
-from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog
-from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
-from networkx.algorithms.bipartite.projection import project
-from Asb.ScanConvert2.GUI.PageView import PageView
+
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
@@ -101,6 +103,7 @@ class Window(QMainWindow):
         self.previewer = previewer
         self.photo_detector = photo_detector
         self.metadata_dialog = MetadataDialog(self)
+        self.ddf_metadata_dialog = DDFMetadataDialog(self)
         self.properties_dialog = PropertiesDialog(self)
         
         self.setGeometry(50, 50, 1000, 600)
@@ -360,6 +363,12 @@ class Window(QMainWindow):
         self.metadata_dialog.metadata = self.project.metadata
         if self.metadata_dialog.exec():
             self.project.metadata = self.metadata_dialog.metadata
+
+    def cb_edit_ddf_metadata(self):
+        
+        self.ddf_metadata_dialog.metadata = self.project.metadata
+        if self.ddf_metadata_dialog.exec():
+            self.project.metadata = self.metadata_dialog.metadata
     
     def cb_edit_properties(self):
         
@@ -418,9 +427,7 @@ class Window(QMainWindow):
             
     def cb_export_ddf(self):
         
-        if not self.project.metadata.reviewed:
-            self.project.metadata.subject = "Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend"
-            self.cb_edit_metadata()
+        self.cb_edit_ddf_metadata()
         
 
         

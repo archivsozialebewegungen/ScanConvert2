@@ -3,12 +3,12 @@ Created on 09.01.2023
 
 @author: michael
 '''
+from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
     QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox
+import pytesseract
 
 from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties
-from PySide6.QtCore import QRect
-import pytesseract
 
 
 class MetadataDialog(QDialog):
@@ -19,6 +19,7 @@ class MetadataDialog(QDialog):
 
     def __init__(self, parent):
         super().__init__(parent)
+        self.object_type = MetaData
         self.setWindowTitle("Metadaten für das Projekt")
         self.setGeometry(40, 40, 600, 400)
         
@@ -28,37 +29,37 @@ class MetadataDialog(QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
 
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
         line_inputs = QHBoxLayout()
-        layout.addLayout(line_inputs)
-        label_column = QVBoxLayout()
-        line_inputs.addLayout(label_column)
-        input_column = QVBoxLayout()
-        line_inputs.addLayout(input_column)
+        self.layout.addLayout(line_inputs)
+        self.label_column = QVBoxLayout()
+        line_inputs.addLayout(self.label_column)
+        self.input_column = QVBoxLayout()
+        line_inputs.addLayout(self.input_column)
         
         label = QLabel("Titel:")
-        label_column.addWidget(label)
+        self.label_column.addWidget(label)
         self.title_input = QLineEdit(self)
-        input_column.addWidget(self.title_input)
+        self.input_column.addWidget(self.title_input)
         
         label = QLabel("Autor:in:")
-        label_column.addWidget(label)
+        self.label_column.addWidget(label)
         self.author_input = QLineEdit(self)
-        input_column.addWidget(self.author_input)
+        self.input_column.addWidget(self.author_input)
         
         label = QLabel("Schlagworte:")
-        label_column.addWidget(label)
+        self.label_column.addWidget(label)
         self.keywords_input = QLineEdit(self)
-        input_column.addWidget(self.keywords_input)
+        self.input_column.addWidget(self.keywords_input)
         
         label = QLabel("Beschreibung:")
-        layout.addWidget(label)
+        self.layout.addWidget(label)
         self.description_input = QPlainTextEdit(self)
-        layout.addWidget(self.description_input)
+        self.layout.addWidget(self.description_input)
         
-        layout.addWidget(buttonBox)
+        self.layout.addWidget(buttonBox)
         
-        self.setLayout(layout)
+        self.setLayout(self.layout)
 
     def _get_metadata(self):
         
@@ -77,8 +78,60 @@ class MetadataDialog(QDialog):
         self.keywords_input.setText(metadata.keywords)
         self.description_input.setPlainText(metadata.subject)
 
-    metadata = property(_get_metadata, _set_metadata)
+    metadata = property(lambda self: self._get_metadata(), lambda self, metadata: self._set_metadata(metadata))
 
+class DDFMetadataDialog(MetadataDialog):
+    '''
+    Dialog zum Erfassen der Metadaten
+    '''
+
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Metadaten für den DDF-Export")
+        self.setGeometry(40, 40, 600, 800)
+
+        label = QLabel("Dateistamm:")
+        self.label_column.addWidget(label)
+        self.ddf_prefix_input = QLineEdit(self)
+        self.input_column.addWidget(self.ddf_prefix_input)
+        
+        label = QLabel("Signatur:")
+        self.label_column.addWidget(label)
+        self.signature_input = QLineEdit(self)
+        self.input_column.addWidget(self.signature_input)
+
+        label = QLabel("Quelle:")
+        self.label_column.addWidget(label)
+        self.source_input = QLineEdit(self)
+        self.input_column.addWidget(self.source_input)
+
+        label = QLabel("Stadt:")
+        self.label_column.addWidget(label)
+        self.city_input = QLineEdit(self)
+        self.input_column.addWidget(self.city_input)
+
+        label = QLabel("Zusatzangabe:")
+        self.label_column.addWidget(label)
+        self.special_instructions_input = QLineEdit(self)
+        self.input_column.addWidget(self.special_instructions_input)
+
+    def _get_metadata(self):
+        
+        metadata = super()._get_metadata()
+        metadata.ddf_prefix = self.ddf_prefix_input.text()
+        metadata.signature = self.signature_input.text()
+        metadata.source = self.source_input.text()
+        metadata.city = self.city_input.text()
+        metadata.special_instructions = self.special_instructions_input.text()
+        return metadata
+
+    def _set_metadata(self, metadata: MetaData):
+        
+        super()._set_metadata(metadata)
+        self.source_input.setText(metadata.source)
+        self.ddf_prefix_input.setText(metadata.ddf_prefix)
+        
 class PropertiesDialog(QDialog):
     '''
     Dialog zum Erfassen der Properties

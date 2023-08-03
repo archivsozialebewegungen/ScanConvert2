@@ -147,6 +147,29 @@ class Scan(object):
             return False
         
         return True
+    
+    def get_raw_image(self):
+        """
+        The only operation performed on the scan is cutting
+        the page region from the scan and rotating it appropriately
+        """
+        
+        img = Image.open(self.filename)
+        #if self.final_rotation_angle != 0:
+        #    img = self._rotate_image(img, self.final_rotation_angle)
+        #img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
+        return img
+
+    def _rotate_image(self, img: Image, angle: int) -> Image:
+
+        if angle == 270:
+            return img.transpose(Image.ROTATE_90)
+        if angle == 180:
+            return img.transpose(Image.ROTATE_180)
+        if angle == 90:
+            return img.transpose(Image.ROTATE_270)
+        
+    source_resolution = property(lambda self: self.resolution)
 
 class NoRegionsOnPageException(Exception):
     
@@ -242,7 +265,7 @@ class Page:
     def _rotate_image(self, img: Image, angle: int) -> Image:
         '''
         Is this a bug in PIL? Do I understand something wrong?
-        Why does ROTATE_90 produce a rotation by 90° counterclockwise?
+        Why does ROTATE_90 produce a rotation_angle by 90° counterclockwise?
         '''
 
         if angle == 270:
@@ -292,10 +315,25 @@ class MetaData(object):
         self.keywords = ""
         self.reviewed = False
 
+        self.ddf_prefix = ""
+        self.signatur = ""
+        self.source = "Feministisches Archiv Freiburg"
+        self.city = "Freiburg im Breisgau"
+        self.special_instructions = "Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend"
+
     def as_dict(self):
         
-        return {"title": self.title, "author": self.author, "subject": self.subject,
-                "keywords": self.keywords, "creator": 'Scan-Convert 2'}
+        return {"title": self.title,
+                "author": self.author,
+                "subject": self.subject,
+                "keywords": self.keywords,
+                "creator": 'Scan-Convert 2',
+                
+                "source": self.source,
+                "city": self.city,
+                "special_instructions": self.special_instructions,
+                "signatur": self.signatur
+                }
 
 class NoPagesInProjectException(Exception):
     
@@ -306,12 +344,12 @@ class Project(object):
     def __init__(self,
                  scans: [],
                  pages: [],
-                 rotation: 0,
+                 rotation_angle: 0,
                  rotation_alternating: False):
 
         self.scans = scans
         self.pages = pages
-        self.rotation = rotation
+        self.rotation_angle = rotation_angle
         self.rotation_alternating = rotation_alternating
         self.metadata = MetaData()
         self.current_page_no = None
