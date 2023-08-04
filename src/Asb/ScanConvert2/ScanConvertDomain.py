@@ -10,6 +10,7 @@ from PIL import Image
 from Asb.ScanConvert2.Algorithms import Algorithm
 import os
 import re
+from Asb.ScanConvert2.CroppingService import CroppingInformation
 
 
 class Mode(Enum):
@@ -107,6 +108,7 @@ class Scan(object):
         
         self.no_of_pages = 1
         self.filename = filename
+        self.cropping_information = None
         
         with Image.open(filename) as img:
             self.width = img.width
@@ -116,6 +118,12 @@ class Scan(object):
             except:
                 self.resolution = None
             self.mode = self._get_mode(img)
+            
+    def add_cropping_information(self, cropping_information: CroppingInformation):
+        
+        self.cropping_information = cropping_information
+        self.width = cropping_information.bounding_box[2] - cropping_information.bounding_box[0]
+        self.height = cropping_information.bounding_box[3] - cropping_information.bounding_box[1]
 
     def _get_mode(self, img) -> Mode:
         
@@ -149,17 +157,13 @@ class Scan(object):
         return True
     
     def get_raw_image(self):
-        """
-        The only operation performed on the scan is cutting
-        the page region from the scan and rotating it appropriately
-        """
-        
-        img = Image.open(self.filename)
-        #if self.final_rotation_angle != 0:
-        #    img = self._rotate_image(img, self.final_rotation_angle)
-        #img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
-        return img
 
+        img = Image.open(self.filename)
+        if self.cropping_information is not None:
+            img = img.rotate(self.cropping_information.rotation_angle, Image.BICUBIC)
+            img = img.crop(self.cropping_information.bounding_box)
+        return img
+ 
     def _rotate_image(self, img: Image, angle: int) -> Image:
 
         if angle == 270:
@@ -245,7 +249,7 @@ class Page:
         the page region from the scan and rotating it appropriately
         """
         
-        img = Image.open(self.scan.filename)
+        img = self.scan.get_raw_image()
         img = img.crop((self.main_region.x, self.main_region.y, self.main_region.x2, self.main_region.y2))
         if img.mode == "1" or img.mode == "L":
             pass

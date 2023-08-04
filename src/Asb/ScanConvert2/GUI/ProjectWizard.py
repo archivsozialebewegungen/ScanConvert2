@@ -59,6 +59,7 @@ class ProjectWizard(QWizard):
     scans = property(_get_scans)
     scan_rotation = property(lambda self: self.pages[SCAN_ROTATION_PAGE].result)
     rotation_alternating = property(lambda self: self.pages[SCAN_ROTATION_PAGE].alternating)
+    cropping = property(lambda self: self.pages[SCAN_ROTATION_PAGE].cropping)
     sort_type = property(_get_sort_type)
     
 
@@ -208,7 +209,11 @@ class ProjectWizardScanRotation(AbstractRadioButtonProjectWizardPage):
         self.alternating_checkbutton = QCheckBox("Drehung ist alternierend")
         self.layout.addWidget(self.alternating_checkbutton)
 
+        self.cropping_checkbutton = QCheckBox("Scans müssen zugeschnitten werden")
+        self.layout.addWidget(self.cropping_checkbutton)
+
     alternating = property(lambda self: self.alternating_checkbutton.isChecked())
+    cropping = property(lambda self: self.cropping_checkbutton.isChecked())
 
 class ProjectWizardPageScans(QWizardPage):
     

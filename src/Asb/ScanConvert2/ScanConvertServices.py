@@ -26,6 +26,8 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
 from fitz.fitz import Document
 from exiftool.exiftool import ExifTool
 from exiftool.helper import ExifToolHelper
+from Asb.ScanConvert2.CroppingService import CroppingService
+from posix import unlink
 
 INVISIBLE = 3
 
@@ -342,10 +344,14 @@ class TiffService(ExportService):
 class DDFService(ExportService):
     
     @inject
-    def __init__(self, finishing_service: FinishingService, iptc_service: IPTCService):
+    def __init__(self,
+                 finishing_service: FinishingService,
+                 iptc_service: IPTCService,
+                 cropping_service: CroppingService):
         
         self.finishing_service = finishing_service
         self.iptc_service = iptc_service
+        self.cropping_service = CroppingService
     
     def create_ddf_file_archive(self, project: Project, filebase):
         
@@ -379,7 +385,9 @@ class DDFService(ExportService):
                 transposition = self.get_transposition(project, counter)
                 if transposition is not None:
                     img = img.transpose(transposition)
-                img = self.add_color_card(img)
+                
+                if counter == 1:
+                    img = self.add_color_card(img)
                 img = self.add_black_border(img)
                 img.save(file_name, tiffinfo=tiff_meta_data, compression=None)
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
@@ -540,19 +548,26 @@ class ProjectService(object):
                  project_generator: ProjectGenerator,
                  pdf_service: PdfService,
                  ddf_service: DDFService,
-                 tiff_service: TiffService):
+                 tiff_service: TiffService,
+                 cropping_service: CroppingService):
         
         self.project_generator = project_generator
         self.pdf_service = pdf_service
         self.ddf_service = ddf_service
         self.tiff_service = tiff_service
+        self.cropping_service = cropping_service
         
     def create_project(self,
                     scans: [],
                     pages_per_scan: int,
                     sort_type: SortType,
                     scan_rotation: int,
-                    rotation_alternating: bool) -> Project:
+                    rotation_alternating: bool,
+                    cropping: bool) -> Project:
+        
+        if cropping:
+            for scan in scans:
+                scan.add_cropping_information(self.cropping_service.get_cropping_information(scan.filename))
 
         return self.project_generator.scans_to_project(scans,
                     pages_per_scan,

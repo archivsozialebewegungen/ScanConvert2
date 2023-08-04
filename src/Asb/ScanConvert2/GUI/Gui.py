@@ -676,7 +676,8 @@ class Window(QMainWindow):
                                                           wizard.pages_per_scan,
                                                           wizard.sort_type,
                                                           wizard.scan_rotation,
-                                                          wizard.rotation_alternating)
+                                                          wizard.rotation_alternating,
+                                                          wizard.cropping)
             project.metadata = MetaData()
             project.metadata.subject= "Alle Rechte an diesem Digitalisat liegen beim\nArchiv Soziale Bewegungen e.V., Freiburg"
             self._init_from_project(project)
