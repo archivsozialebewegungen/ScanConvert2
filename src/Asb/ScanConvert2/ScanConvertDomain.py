@@ -65,8 +65,12 @@ def get_image_resolution(img: Image) -> int:
 
 class ProjectProperties(object):
     
-    def __init__(self):
+    def __init__(self, pages_per_scan, sort_type, scan_rotation, rotation_alternating):
         
+        self.pages_per_scan = pages_per_scan
+        self.sort_type = sort_type
+        self.scan_rotation = scan_rotation
+        self.rotation_alternating = rotation_alternating
         self.pdf_resolution = 300
         self.tif_resolution = 300
         self.run_ocr = True
@@ -352,16 +356,13 @@ class Project(object):
     def __init__(self,
                  scans: [],
                  pages: [],
-                 rotation_angle: 0,
-                 rotation_alternating: False):
+                 project_properties):
 
         self.scans = scans
         self.pages = pages
-        self.rotation_angle = rotation_angle
-        self.rotation_alternating = rotation_alternating
         self.metadata = MetaData()
         self.current_page_no = None
-        self.project_properties = ProjectProperties()
+        self.project_properties = project_properties
     
     def first_page(self):
         

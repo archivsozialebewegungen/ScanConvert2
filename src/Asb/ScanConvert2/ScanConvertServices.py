@@ -31,13 +31,14 @@ import re
 
 INVISIBLE = 3
 
+
 @singleton
 class IPTCService(object):
     
-    SOURCE = "1IPTC:Source"
-    CITY = "1IPTC:City"
-    SPECIAL_INSTRUCTIONS = "1IPTC:SpecialInstructions"
-    CATALOG_SETS = "1IPTC:CatalogSets"
+    SOURCE = "IPTC:Source"
+    CITY = "IPTC:City"
+    SPECIAL_INSTRUCTIONS = "IPTC:SpecialInstructions"
+    CATALOG_SETS = "IPTC:CatalogSets"
     
     def write_iptc_tags(self, filename, tags):
         
@@ -50,6 +51,7 @@ class IPTCService(object):
             meta_data = exif_tool.get_meatadata(filename)
             
         return meta_data            
+
 
 @singleton
 class OCRService(object):
@@ -139,6 +141,7 @@ class OCRService(object):
             text_origin_y = (line.bbox[3] - baseline_abweichung) * 72.0 / page.dpi
         
         return (text_origin_x, text_origin_y)
+
 
 @singleton
 class FinishingService(object):
@@ -248,6 +251,7 @@ class FinishingService(object):
                 
         return self.algorithm_implementations[algorithm].get_bg_color(img, mode)
 
+
 @singleton
 class PdfService:
     
@@ -261,7 +265,7 @@ class PdfService:
         self.finishing_service = finishing_service
         self.algorithm_helper = algorithm_helper
     
-    def create_pdf_file(self, project: Project, filebase: str, stupid_ddf_pdf: bool = False):
+    def create_pdf_file(self, project: Project, filebase: str, stupid_ddf_pdf: bool=False):
    
         bg_colors = []
    
@@ -281,7 +285,7 @@ class PdfService:
                 if page.skip_page:
                     continue
 
-                if stupid_ddf_pdf:                
+                if stupid_ddf_pdf: 
                     image = page.get_raw_image()
                 else:
                     image, new_bg_colors = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
@@ -324,6 +328,7 @@ class PdfService:
         if filebase[-4:] == ".pdf":
             return filebase
         return filebase + ".pdf"
+
 
 class ExportService(object):
 
@@ -435,8 +440,6 @@ class DDFService(ExportService):
     
     def create_ddf_file_archive(self, project: Project, filebase):
         
-        
-        
         with tempfile.TemporaryDirectory() as tempdir:
 
             projectfiles = self._write_scans(project, tempdir)
@@ -471,7 +474,21 @@ class DDFService(ExportService):
             for scan in project.scans:
                 counter += 1
                 tiff_meta_data[self.page_name_tag] = "Scan %d von %d" % (counter, no_of_scans)
-                scan_file_name = "%s%05d.tif" % (file_prefix, counter)
+                if project.project_properties.sort_type == SortType.SHEET:
+                    scan_file_name = "%s%05d" % (file_prefix, int((counter - 1) / 2) + 1)
+                    if counter % 2 == 0:
+                        scan_file_name += "verso.tif"
+                    else:
+                        scan_file_name += "recto.tif"
+                elif project.project_properties.sort_type == SortType.SHEET_ALL_FRONT_ALL_BACK:
+                    sheet_no = counter
+                    if counter > no_of_scans / 2:
+                        sheet_no = counter - no_of_scans / 2
+                        scan_file_name = "%s%05drecto.tif" % (file_prefix, sheet_no)
+                    else: 
+                        scan_file_name = "%s%05drecto.tif" % (file_prefix, sheet_no)
+                else:
+                    scan_file_name = "%s%05d.tif" % (file_prefix, counter)
                 file_name = os.path.join(tempdir, scan_file_name)
                 alto_file_name = "%s.alto" % file_name
                 img = self.finishing_service.create_scaled_image(scan, 400)
@@ -577,23 +594,23 @@ class DDFService(ExportService):
             
     def get_transposition(self, project, scan_no):
             
-        if project.rotation_alternating and scan_no % 2 == 1:
-            if project.rotation_angle == 0:
+        if project.project_properties.rotation_alternating and scan_no % 2 == 1:
+            if project.project_properties.scan_rotation == 0:
                 return Image.ROTATE_180
-            if project.rotation_angle == 90:
+            if project.project_properties.scan_rotation == 90:
                 return Image.ROTATE_270
-            if project.rotation_angle == 180:
+            if project.project_properties.scan_rotation == 180:
                 return None
-            if project.rotation_angle == 270:
+            if project.project_properties.scan_rotation == 270:
                 return Image.ROTATE_90
         else:
-            if project.rotation_angle == 0:
+            if project.project_properties.scan_rotation == 0:
                 return None
-            if project.rotation_angle == 90:
+            if project.project_properties.scan_rotation == 90:
                 return Image.ROTATE_90
-            if project.rotation_angle == 180:
+            if project.project_properties.scan_rotation == 180:
                 return Image.ROTATE_180
-            if project.rotation_angle == 270:
+            if project.project_properties.scan_rotation == 270:
                 return Image.ROTATE_270
             
     def add_color_card(self, img):
@@ -616,8 +633,9 @@ class DDFService(ExportService):
         new_width = img.width + additional_pixels
         new_height = img.height + additional_pixels
         new_img = Image.new(img.mode, (new_width, new_height), ImageColor.getcolor("black", img.mode))
-        new_img.paste(img, (int(additional_pixels/2), int(additional_pixels/2)))
+        new_img.paste(img, (int(additional_pixels / 2), int(additional_pixels / 2)))
         return new_img
+
 
 @singleton    
 class ProjectService(object):

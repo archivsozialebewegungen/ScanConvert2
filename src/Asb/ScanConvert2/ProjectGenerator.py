@@ -6,7 +6,7 @@ Created on 04.11.2022
 from injector import inject, singleton
 
 from Asb.ScanConvert2.ScanConvertDomain import Page, Region, \
-    Scan, Project
+    Scan, Project, ProjectProperties
 from enum import Enum
     
 class SortType(Enum):
@@ -255,6 +255,8 @@ class ProjectGenerator():
                     sort_type: SortType,
                     scan_rotation: int,
                     rotation_alternating: bool):
+
+        project_properties = ProjectProperties(pages_per_scan, sort_type, scan_rotation, rotation_alternating)
     
         if pages_per_scan == 2:
             scans = self.number_of_pages_detector.set_numbers(scans)
@@ -264,4 +266,5 @@ class ProjectGenerator():
                     scan_rotation,
                     rotation_alternating)
         
-        return Project(scans, self.page_sorter.sort_pages(pages, sort_type), scan_rotation, rotation_alternating)
+        
+        return Project(scans, self.page_sorter.sort_pages(pages, sort_type), project_properties)
