@@ -73,7 +73,7 @@ class OcrRunner(object):
 
     def run_tesseract(self, img: Image, lang: str) -> OCRPage:
         '''
-        This is the only public method. It executes OCR on the given image and
+        This is one of two public methods. It executes OCR on the given image and
         returns the information in a page object.
         '''
 
@@ -83,6 +83,14 @@ class OcrRunner(object):
         page.width = img.size[0]
         page.height = img.size[1]
         return self._parse_dom(dom, page)
+
+    def run_tesseract_for_alto(self, img: Image, lang: str) -> OCRPage:
+        '''
+        Executes tesseract and returns the result als alto dom.
+        '''
+
+        alto = pytesseract.image_to_alto_xml(img, lang=lang)
+        return parseString(alto)
     
     def _parse_dom(self, dom: Element, page: OCRPage):
 

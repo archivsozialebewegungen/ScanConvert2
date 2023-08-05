@@ -19,15 +19,15 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
-    AlgorithmHelper, TooManyColors, RGB_WHITE
+    AlgorithmHelper
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
 from fitz.fitz import Document
-from exiftool.exiftool import ExifTool
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
-from posix import unlink
+from xml.dom.minidom import parseString
+import re
 
 INVISIBLE = 3
 
@@ -140,7 +140,6 @@ class OCRService(object):
         
         return (text_origin_x, text_origin_y)
 
-        
 @singleton
 class FinishingService(object):
     
@@ -249,6 +248,82 @@ class FinishingService(object):
                 
         return self.algorithm_implementations[algorithm].get_bg_color(img, mode)
 
+@singleton
+class PdfService:
+    
+    @inject
+    def __init__(self,
+                 ocr_service: OCRService,
+                 finishing_service: FinishingService,
+                 algorithm_helper: AlgorithmHelper):
+
+        self.ocr_service = ocr_service
+        self.finishing_service = finishing_service
+        self.algorithm_helper = algorithm_helper
+    
+    def create_pdf_file(self, project: Project, filebase: str, stupid_ddf_pdf: bool = False):
+   
+        bg_colors = []
+   
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_file = os.path.join(temp_dir, "output.pdf")
+            pdf = Canvas(temp_file, pageCompression=1)
+            pdf.setAuthor(project.metadata.author)
+            pdf.setCreator('Scan-Convert 2')
+            pdf.setTitle(project.metadata.title)
+            pdf.setKeywords(project.metadata.keywords)
+            pdf.setSubject(project.metadata.subject)
+        
+            page_counter = 0
+            
+            for page in project.pages:
+                page_counter += 1
+                if page.skip_page:
+                    continue
+
+                if stupid_ddf_pdf:                
+                    image = page.get_raw_image()
+                else:
+                    image, new_bg_colors = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
+                    if project.project_properties.normalize_background_colors:
+                        bg_colors = new_bg_colors
+                width_in_dots, height_in_dots = image.size
+            
+                page_width = width_in_dots * 72 / project.project_properties.pdf_resolution
+                page_height = height_in_dots * 72 / project.project_properties.pdf_resolution
+            
+                pdf.setPageSize((width_in_dots * inch / project.project_properties.pdf_resolution,
+                                 height_in_dots * inch / project.project_properties.pdf_resolution))
+
+                img_stream = io.BytesIO()
+                # if image.mode == "1":
+                image.save(img_stream, format='png')
+                # else:
+                # image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
+                img_stream.seek(0)
+                img_reader = ImageReader(img_stream)
+                pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
+                if project.project_properties.run_ocr:
+                    pdf = self.ocr_service.add_ocrresult_to_pdf(self.finishing_service.create_pdf_image(page, project.project_properties.pdf_resolution), pdf, project.project_properties.ocr_lang)
+                pdf.showPage()
+        
+            pdf.save()
+            # Convert to pdfa and optimize graphics
+            if project.project_properties.create_pdfa:
+                # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
+                ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
+                ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
+                document = Document(ocrmypdf_temp_file)
+                document.set_metadata(project.metadata.as_pdf_metadata_dict())
+                document.save(self._get_file_name(filebase))
+            else:
+                shutil.copy(temp_file, self._get_file_name(filebase))
+        
+    def _get_file_name(self, filebase: str):
+        
+        if filebase[-4:] == ".pdf":
+            return filebase
+        return filebase + ".pdf"
 
 class ExportService(object):
 
@@ -329,7 +404,7 @@ class TiffService(ExportService):
                 readme.write("Anzahl der Seiten/Dateien: %d\n" % no_of_pages)
                 readme.write("Autor:in: %s\n\n" % project.metadata.author)
                 readme.write("Sonstige Informationen:\n%s\n\n" % project.metadata.subject)
-                readme.write("Schlagworte: %s\n\n" % project.metadata.keywords)
+                readme.write("Schlagwor += te: %s\n\n" % project.metadata.keywords)
                 readme.write("Dieses ZIP-Archiv enthält Digitalisatsdateien, die mit dem\n")
                 readme.write("Scan Konvertierungsprogramm des Archivs Soziale Bewegungen e.V.\n")
                 readme.write("Freiburg erstellt und zusammengepackt wurden.\n")
@@ -347,26 +422,43 @@ class DDFService(ExportService):
     def __init__(self,
                  finishing_service: FinishingService,
                  iptc_service: IPTCService,
-                 cropping_service: CroppingService):
+                 cropping_service: CroppingService,
+                 ocr_runner: OcrRunner,
+                 pdf_service: PdfService
+                 ):
         
         self.finishing_service = finishing_service
         self.iptc_service = iptc_service
-        self.cropping_service = CroppingService
+        self.cropping_service = cropping_service
+        self.ocr_runner = ocr_runner
+        self.pdf_service = pdf_service
     
     def create_ddf_file_archive(self, project: Project, filebase):
         
-        zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
         
         
         with tempfile.TemporaryDirectory() as tempdir:
 
-            self._write_scans(project, tempdir, zipfile)
-            self._write_pages(project, tempdir, zipfile)
+            projectfiles = self._write_scans(project, tempdir)
+            projectfiles += self._write_pages(project, tempdir)
+
+            pdf_file = self._write_stupid_pdf(project, tempdir)
+            projectfiles.append(pdf_file)
             
+            projectfiles.append(self._join_alto_files(projectfiles, "%s.alto" % pdf_file))
+            
+            self._create_zip_file(filebase, projectfiles)
+    
+    def _create_zip_file(self, filebase, projectfiles):
+
+        zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
+        for file in projectfiles:
+            zipfile.write(file, os.path.basename(file))
         zipfile.close()
         
-    def _write_scans(self, project, tempdir, zipfile):
-        
+    def _write_scans(self, project, tempdir):
+
+            projectfiles = []        
             no_of_scans = len(project.pages)
             file_prefix = project.metadata.ddf_prefix
             tiff_meta_data = self._build_tiff_metadata(project)
@@ -381,20 +473,26 @@ class DDFService(ExportService):
                 tiff_meta_data[self.page_name_tag] = "Scan %d von %d" % (counter, no_of_scans)
                 scan_file_name = "%s%05d.tif" % (file_prefix, counter)
                 file_name = os.path.join(tempdir, scan_file_name)
+                alto_file_name = "%s.alto" % file_name
                 img = self.finishing_service.create_scaled_image(scan, 400)
                 transposition = self.get_transposition(project, counter)
                 if transposition is not None:
                     img = img.transpose(transposition)
-                
+                self._write_alto_file(img, alto_file_name, project.project_properties.ocr_lang)
                 if counter == 1:
                     img = self.add_color_card(img)
                 img = self.add_black_border(img)
                 img.save(file_name, tiffinfo=tiff_meta_data, compression=None)
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
-                zipfile.write(file_name, scan_file_name)
+                projectfiles.append(file_name)
+                projectfiles.append(alto_file_name)
 
-    def _write_pages(self, project, tempdir, zipfile):
-        
+            return projectfiles
+
+    def _write_pages(self, project, tempdir):
+
+            projectfiles = []
+                    
             no_of_pages = len(project.pages)
             file_prefix = project.metadata.ddf_prefix
             tiff_meta_data = self._build_tiff_metadata(project)
@@ -409,11 +507,67 @@ class DDFService(ExportService):
                 tiff_meta_data[self.page_name_tag] = "Seite %d von %d" % (counter, no_of_pages)
                 scan_file_name = "%s%05d.jpg" % (file_prefix, counter)
                 file_name = os.path.join(tempdir, scan_file_name)
+                alto_file_name = "%s.alto" % file_name
                 img = self.finishing_service.create_scaled_image(page, 300)
+                self._write_alto_file(img, alto_file_name, project.project_properties.ocr_lang)
                 img.save(file_name, quality=95, optimize=True)
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
-                zipfile.write(file_name, scan_file_name)
+                projectfiles.append(file_name)
+                projectfiles.append(alto_file_name)
+    
+            return projectfiles
+
+    def _write_alto_file(self, img, file_name, ocr_lang):
         
+        alto_dom = self.ocr_runner.run_tesseract_for_alto(img, ocr_lang)
+        file = open(file_name, "w")
+        file.write(alto_dom.toprettyxml())
+        file.close()
+
+    def _join_alto_files(self, projectfiles, file_name):
+        
+        id_re = re.compile(r'ID="([a-z]+)_')
+        
+        output = open(file_name, "w")
+        
+        alto_files = self._fetch_page_alto_files(projectfiles)
+        with open(alto_files[0], 'r') as file:
+            alto1_as_string = file.read()
+            main_dom = parseString(re.sub(id_re, r'ID="\1_1_', alto1_as_string))
+        
+        layouts = main_dom.getElementsByTagName("Layout")
+        layout = layouts[0]
+        
+        counter = 1
+        for alto_file in alto_files[1:]:
+            counter += 1
+            with open(alto_file, 'r') as file:
+                alto_as_string = file.read()
+                dom = parseString(re.sub(id_re, r'ID="\1_%d_' % counter, alto_as_string))
+            pages = dom.getElementsByTagName("Page")
+            layout.childNodes.append(pages[0])
+        
+        output.write(main_dom.toprettyxml())
+        output.close()
+        
+        return file_name
+        
+    def _fetch_page_alto_files(self, projectfiles):
+        
+        page_alto_files = []
+        for projectfilename in projectfiles:
+            if projectfilename[-9:] == ".jpg.alto":
+                page_alto_files.append(projectfilename)
+        return page_alto_files 
+                
+    def _write_stupid_pdf(self, project, tempdir):
+        
+        pdf_name = project.metadata.ddf_prefix + ".pdf"
+        output_name = os.path.join(tempdir, pdf_name)
+        self.pdf_service.create_pdf_file(project, output_name, stupid_ddf_pdf=True)
+        
+        return output_name
+    
     def _build_iptc_metadata(self, project: Project):
 
         return {self.iptc_service.SOURCE: project.metadata.source,
@@ -464,81 +618,6 @@ class DDFService(ExportService):
         new_img = Image.new(img.mode, (new_width, new_height), ImageColor.getcolor("black", img.mode))
         new_img.paste(img, (int(additional_pixels/2), int(additional_pixels/2)))
         return new_img
-
-
-@singleton
-class PdfService:
-    
-    @inject
-    def __init__(self,
-                 ocr_service: OCRService,
-                 finishing_service: FinishingService,
-                 algorithm_helper: AlgorithmHelper):
-
-        self.ocr_service = ocr_service
-        self.finishing_service = finishing_service
-        self.algorithm_helper = algorithm_helper
-    
-    def create_pdf_file(self, project: Project, filebase: str):
-   
-        bg_colors = []
-   
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_file = os.path.join(temp_dir, "output.pdf")
-            pdf = Canvas(temp_file, pageCompression=1)
-            pdf.setAuthor(project.metadata.author)
-            pdf.setCreator('Scan-Convert 2')
-            pdf.setTitle(project.metadata.title)
-            pdf.setKeywords(project.metadata.keywords)
-            pdf.setSubject(project.metadata.subject)
-        
-            page_counter = 0
-            for page in project.pages:
-                page_counter += 1
-                if page.skip_page:
-                    continue
-                image, new_bg_colors = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
-                if project.project_properties.normalize_background_colors:
-                    bg_colors = new_bg_colors
-                width_in_dots, height_in_dots = image.size
-            
-                page_width = width_in_dots * 72 / project.project_properties.pdf_resolution
-                page_height = height_in_dots * 72 / project.project_properties.pdf_resolution
-            
-                pdf.setPageSize((width_in_dots * inch / project.project_properties.pdf_resolution,
-                                 height_in_dots * inch / project.project_properties.pdf_resolution))
-
-                img_stream = io.BytesIO()
-                # if image.mode == "1":
-                image.save(img_stream, format='png')
-                # else:
-                # image.save(img_stream, format='jpeg2000', quality=65, optimize=True)
-                img_stream.seek(0)
-                img_reader = ImageReader(img_stream)
-                pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
-                if project.project_properties.run_ocr:
-                    pdf = self.ocr_service.add_ocrresult_to_pdf(self.finishing_service.create_pdf_image(page, project.project_properties.pdf_resolution), pdf, project.project_properties.ocr_lang)
-                pdf.showPage()
-        
-            pdf.save()
-            # Convert to pdfa and optimize graphics
-            if project.project_properties.create_pdfa:
-                # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
-                ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
-                ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
-                document = Document(ocrmypdf_temp_file)
-                document.set_metadata(project.metadata.as_dict())
-                document.save(self._get_file_name(filebase))
-            else:
-                shutil.copy(temp_file, self._get_file_name(filebase))
-        
-    def _get_file_name(self, filebase: str):
-        
-        if filebase[-4:] == ".pdf":
-            return filebase
-        return filebase + ".pdf"
-
-
 
 @singleton    
 class ProjectService(object):

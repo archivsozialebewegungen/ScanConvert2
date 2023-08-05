@@ -334,20 +334,15 @@ class MetaData(object):
         self.city = "Freiburg im Breisgau"
         self.special_instructions = "Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend"
 
-    def as_dict(self):
+    def as_pdf_metadata_dict(self):
         
         return {"title": self.title,
                 "author": self.author,
                 "subject": self.subject,
                 "keywords": self.keywords,
-                "creator": 'Scan-Convert 2',
-                
-                "source": self.source,
-                "city": self.city,
-                "special_instructions": self.special_instructions,
-                "signatur": self.signatur
+                "creator": 'Scan-Convert 2'
                 }
-
+                
 class NoPagesInProjectException(Exception):
     
     pass
