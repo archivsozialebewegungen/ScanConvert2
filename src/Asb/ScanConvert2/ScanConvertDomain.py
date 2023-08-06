@@ -63,6 +63,82 @@ def get_image_resolution(img: Image) -> int:
     # newer versions of Pillow return a float
     return round(xres)
 
+class DDFFileType(Enum):
+    
+    ARCHIVE = 1
+    DISPLAY = 2
+    PDF = 3
+    METS = 4
+
+class DDFFile(object):
+    
+    def __init__(self, file_type: DDFFileType, sequence_no: str, temp_file_name):
+        
+        self.file_type = file_type
+        self.sequence_no = sequence_no # may be "00005recto", so the type is string
+        self.temp_file_name = temp_file_name
+        self.img_object = None
+
+    def _generate_file_id(self):
+        
+        basename = os.path.basename(self.temp_file_name)
+        file_id = ""
+        if basename[-4:] == ".tif":
+            file_id += "af_"
+        if basename[-4:] == ".jpg":
+            file_id += "df_"
+        if basename[-4:] == ".pdf":
+            file_id += "pf_"
+        file_id += basename[:-4]
+        
+        return file_id
+    
+    def _get_mime_type(self):
+        
+        if self.file_type == DDFFileType.ARCHIVE:
+            return "image/tiff"
+        elif self.file_type == DDFFileType.DISPLAY:
+            return "image/jpeg"
+        elif self.file_type == DDFFileType.PDF:
+            return "application/pdf"
+        elif self.file_type == DDFFileType.METS:
+            return "application/xml"
+        
+        raise Exception("Unknown file type %s" % self.file_type)
+        
+    def _generate_alto_file_id(self):
+        
+        return "ocr_%s" % self._generate_file_id()
+        
+    def __lt__(self, other):
+        
+        return self.sequence_no < other.sequence_no
+    
+    def __gt__(self, other):
+
+        return self.sequence_no > other.sequence_no
+
+    def __le__(self, other):
+        
+        return self.sequence_no <= other.sequence_no
+    
+    def __ge__(self, other):
+
+        return self.sequence_no >= other.sequence_no
+    
+    def __eq__(self, other):
+        
+        return self.sequence_no == other.sequence_no
+
+    alto_file_name = property(lambda self: self.temp_file_name + ".alto")
+    file_id = property(_generate_file_id)
+    alto_file_id = property(_generate_alto_file_id)
+    mime_type = property(_get_mime_type)
+    basename = property(lambda self: os.path.basename(self.temp_file_name))
+    alto_basename = property(lambda self: os.path.basename(self.alto_file_name))
+    zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.basename))
+    alto_zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.alto_basename))
+
 class ProjectProperties(object):
     
     def __init__(self, pages_per_scan, sort_type, scan_rotation, rotation_alternating):
