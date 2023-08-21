@@ -22,15 +22,102 @@ from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
-from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region
-from fitz.fitz import Document
+from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
+    DDFFileType
+from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
-from xml.dom.minidom import parseString
+from xml.dom.minidom import parseString, Document
 import re
 
 INVISIBLE = 3
 
+@singleton
+class METSService(object):
+    
+    def export_mets_data(self, project, projectfiles, output_file_name):
+        
+        doc = Document()
+        mets_root = self._create_root_element(doc)
+        doc.appendChild(mets_root)
+        file_section = self._create_file_section(doc, projectfiles)
+        mets_root.appendChild(file_section)
+        structural_map = self._create_structural_map(doc, projectfiles)
+        mets_root.appendChild(structural_map)
+        self._write_document(doc, output_file_name)
+        
+    def _create_structural_map(self, document, projectfiles):
+        
+        structural_map = document.createElement("mets:structMap")
+        
+        return structural_map
+        
+    def _create_file_section(self, document, projectfiles):
+        
+        file_section = document.createElement("mets:fileSec")
+        
+        for file_group in self._create_file_groups(document, projectfiles):
+            file_section.appendChild(file_group)
+        
+        return file_section
+    
+    def _create_file_groups(self, document, projectfiles):
+        
+        groups = []
+        
+        for file_type in (DDFFileType.ARCHIVE, DDFFileType.DISPLAY, DDFFileType.PDF):
+            groups.append(self._create_file_group(document, file_type, projectfiles))
+        
+        return groups
+    
+    def _create_file_group(self, document, file_type, projectfiles):
+        
+        group_element = document.createElement("mets:fileGrp")
+        group_element.setAttribute("USE", "%s files" % file_type.name.lower())
+        
+        for ddf_file in projectfiles:
+            
+            if ddf_file.file_type != file_type:
+                continue
+            
+            file_element = document.createElement("mets:file")
+            file_element.setAttribute("ID", ddf_file.file_id)
+            file_element.setAttribute("MIMETYPE", ddf_file.mime_type)
+            group_element.appendChild(file_element)
+            
+            location_element = document.createElement("mets:FLocat")
+            location_element.setAttribute("xlink:href", ddf_file.zip_location)
+            location_element.setAttribute("LOCTYPE", "URL")
+            file_element.appendChild(location_element)
+
+            file_element = document.createElement("mets:file")
+            file_element.setAttribute("ID", ddf_file.alto_file_id)
+            file_element.setAttribute("MIMETYPE", "application/xml")
+            group_element.appendChild(file_element)
+            
+            location_element = document.createElement("mets:FLocat")
+            location_element.setAttribute("xlink:href", ddf_file.alto_zip_location)
+            location_element.setAttribute("LOCTYPE", "URL")
+            file_element.appendChild(location_element)
+        
+        return group_element
+    
+                    
+    def _create_root_element(self, document):
+        
+        mets_root = document.createElement("mets:mets")
+        mets_root.setAttributeNS("mets:mets", "xmlns:mets", "http://www.loc.gov/METS/")
+        mets_root.setAttributeNS("mets:mets", "xmlns:mods", "http://www.loc.gov/mods/v3")
+        mets_root.setAttributeNS("mets:mets", "xmlns:xlink", "http://www.w3.org/1999/xlink")
+        mets_root.setAttributeNS("mets:mets", "xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
+        mets_root.setAttributeNS("mets:mets", "xsi:schemaLocation", "http://www.loc.gov/METS/\nhttp://www.loc.gov/standards/mets/mets.xsd http://www.loc.gov/mods/v3\nhttp://www.loc.gov/mods/v3/mods-3-1.xsd")
+
+        return mets_root
+    
+    def _write_document(self, doc, output_file_name):
+        
+        with open(output_file_name, "w") as output:
+            output.write(doc.toprettyxml(indent="  "))
 
 @singleton
 class IPTCService(object):
@@ -317,7 +404,7 @@ class PdfService:
                 # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
                 ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
                 ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
-                document = Document(ocrmypdf_temp_file)
+                document = PdfDocument(ocrmypdf_temp_file)
                 document.set_metadata(project.metadata.as_pdf_metadata_dict())
                 document.save(self._get_file_name(filebase))
             else:
@@ -429,7 +516,8 @@ class DDFService(ExportService):
                  iptc_service: IPTCService,
                  cropping_service: CroppingService,
                  ocr_runner: OcrRunner,
-                 pdf_service: PdfService
+                 pdf_service: PdfService,
+                 mets_service: METSService
                  ):
         
         self.finishing_service = finishing_service
@@ -437,6 +525,7 @@ class DDFService(ExportService):
         self.cropping_service = cropping_service
         self.ocr_runner = ocr_runner
         self.pdf_service = pdf_service
+        self.mets_service = mets_service
     
     def create_ddf_file_archive(self, project: Project, filebase):
         
@@ -446,17 +535,30 @@ class DDFService(ExportService):
             projectfiles += self._write_pages(project, tempdir)
 
             pdf_file = self._write_stupid_pdf(project, tempdir)
+            self._join_alto_files(projectfiles, "%s.alto" % pdf_file.temp_file_name)
             projectfiles.append(pdf_file)
             
-            projectfiles.append(self._join_alto_files(projectfiles, "%s.alto" % pdf_file))
+            mets_file_name = os.path.join(tempdir, "%s.mets" % project.metadata.ddf_prefix)
+            self.mets_service.export_mets_data(project, projectfiles, mets_file_name)
+            projectfiles.append(DDFFile(DDFFileType.METS, None, mets_file_name))
             
             self._create_zip_file(filebase, projectfiles)
     
     def _create_zip_file(self, filebase, projectfiles):
 
         zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
-        for file in projectfiles:
-            zipfile.write(file, os.path.basename(file))
+        for ddf_file in projectfiles:
+            if ddf_file.file_type == DDFFileType.ARCHIVE:
+                zipfile.write(ddf_file.temp_file_name, "archive/%s" % os.path.basename(ddf_file.temp_file_name))
+                zipfile.write(ddf_file.alto_file_name, "archive/%s" % os.path.basename(ddf_file.alto_file_name))
+            elif ddf_file.file_type == DDFFileType.DISPLAY:
+                zipfile.write(ddf_file.temp_file_name, "display/%s" % os.path.basename(ddf_file.temp_file_name))
+                zipfile.write(ddf_file.alto_file_name, "display/%s" % os.path.basename(ddf_file.alto_file_name))
+            if ddf_file.file_type == DDFFileType.PDF:
+                zipfile.write(ddf_file.temp_file_name, "pdf/%s" % os.path.basename(ddf_file.temp_file_name))
+                zipfile.write(ddf_file.alto_file_name, "pdf/%s" % os.path.basename(ddf_file.alto_file_name))
+            else:
+                zipfile.write(ddf_file.temp_file_name, os.path.basename(ddf_file.temp_file_name))
         zipfile.close()
         
     def _write_scans(self, project, tempdir):
@@ -464,6 +566,7 @@ class DDFService(ExportService):
             projectfiles = []        
             no_of_scans = len(project.pages)
             file_prefix = project.metadata.ddf_prefix
+            
             tiff_meta_data = self._build_tiff_metadata(project)
             tiff_meta_data[self.x_resolution] = 400
             tiff_meta_data[self.y_resolution] = 400
@@ -472,37 +575,41 @@ class DDFService(ExportService):
             
             counter = 0
             for scan in project.scans:
+                
                 counter += 1
+                
                 tiff_meta_data[self.page_name_tag] = "Scan %d von %d" % (counter, no_of_scans)
+                
                 if project.project_properties.sort_type == SortType.SHEET:
-                    scan_file_name = "%s%05d" % (file_prefix, int((counter - 1) / 2) + 1)
+                    sequence_no = "%05d" % int(((counter - 1) / 2) + 1)
                     if counter % 2 == 0:
-                        scan_file_name += "verso.tif"
+                        sequence_no += "verso"
                     else:
-                        scan_file_name += "recto.tif"
+                        sequence_no += "recto"
                 elif project.project_properties.sort_type == SortType.SHEET_ALL_FRONT_ALL_BACK:
                     sheet_no = counter
                     if counter > no_of_scans / 2:
-                        sheet_no = counter - no_of_scans / 2
-                        scan_file_name = "%s%05drecto.tif" % (file_prefix, sheet_no)
+                        sheet_no = counter - (no_of_scans / 2)
+                        sequence_no = "%05verso" % sheet_no
                     else: 
-                        scan_file_name = "%s%05drecto.tif" % (file_prefix, sheet_no)
+                        sequence_no = "%05recto" % sheet_no
                 else:
-                    scan_file_name = "%s%05d.tif" % (file_prefix, counter)
+                    sequence_no = "%05d" % counter
+                scan_file_name = "%s%s.tif" % (file_prefix, sequence_no)
                 file_name = os.path.join(tempdir, scan_file_name)
-                alto_file_name = "%s.alto" % file_name
+                ddf_file = DDFFile(DDFFileType.ARCHIVE, sequence_no, file_name)
+                projectfiles.append(ddf_file)
+
                 img = self.finishing_service.create_scaled_image(scan, 400)
                 transposition = self.get_transposition(project, counter)
                 if transposition is not None:
                     img = img.transpose(transposition)
-                self._write_alto_file(img, alto_file_name, project.project_properties.ocr_lang)
                 if counter == 1:
                     img = self.add_color_card(img)
                 img = self.add_black_border(img)
                 img.save(file_name, tiffinfo=tiff_meta_data, compression=None)
+                self._write_alto_file(img, ddf_file.alto_file_name, project.project_properties.ocr_lang)
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
-                projectfiles.append(file_name)
-                projectfiles.append(alto_file_name)
 
             return projectfiles
 
@@ -512,25 +619,24 @@ class DDFService(ExportService):
                     
             no_of_pages = len(project.pages)
             file_prefix = project.metadata.ddf_prefix
-            tiff_meta_data = self._build_tiff_metadata(project)
-            tiff_meta_data[self.x_resolution] = 400
-            tiff_meta_data[self.y_resolution] = 400
+            # TODO: Create Metadata
             
             iptc_tags = self._build_iptc_metadata(project)
             
             counter = 0
             for page in project.pages:
                 counter += 1
-                tiff_meta_data[self.page_name_tag] = "Seite %d von %d" % (counter, no_of_pages)
+                
                 scan_file_name = "%s%05d.jpg" % (file_prefix, counter)
                 file_name = os.path.join(tempdir, scan_file_name)
-                alto_file_name = "%s.alto" % file_name
+                ddf_file = DDFFile(DDFFileType.DISPLAY, counter, file_name)
+                ddf_file.img_object = page
+                projectfiles.append(ddf_file)
+
                 img = self.finishing_service.create_scaled_image(page, 300)
-                self._write_alto_file(img, alto_file_name, project.project_properties.ocr_lang)
+                self._write_alto_file(img, ddf_file.alto_file_name, project.project_properties.ocr_lang)
                 img.save(file_name, quality=95, optimize=True)
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
-                projectfiles.append(file_name)
-                projectfiles.append(alto_file_name)
     
             return projectfiles
 
@@ -572,18 +678,18 @@ class DDFService(ExportService):
     def _fetch_page_alto_files(self, projectfiles):
         
         page_alto_files = []
-        for projectfilename in projectfiles:
-            if projectfilename[-9:] == ".jpg.alto":
-                page_alto_files.append(projectfilename)
+        for ddf_file in projectfiles:
+            if ddf_file.file_type == DDFFileType.DISPLAY:
+                page_alto_files.append(ddf_file.alto_file_name)
         return page_alto_files 
                 
     def _write_stupid_pdf(self, project, tempdir):
         
-        pdf_name = project.metadata.ddf_prefix + ".pdf"
+        pdf_name = project.metadata.ddf_prefix + "00001.pdf"
         output_name = os.path.join(tempdir, pdf_name)
         self.pdf_service.create_pdf_file(project, output_name, stupid_ddf_pdf=True)
         
-        return output_name
+        return DDFFile(DDFFileType.PDF, 1, output_name)
     
     def _build_iptc_metadata(self, project: Project):
 
