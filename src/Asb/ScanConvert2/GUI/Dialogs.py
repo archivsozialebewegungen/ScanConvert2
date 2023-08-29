@@ -116,21 +116,78 @@ class DDFMetadataDialog(MetadataDialog):
         self.special_instructions_input = QLineEdit(self)
         self.input_column.addWidget(self.special_instructions_input)
 
+        label = QLabel("Mets Dokumenttyp:")
+        self.label_column.addWidget(label)
+        self.mets_type_input = QLineEdit(self)
+        self.input_column.addWidget(self.mets_type_input)
+
+        label = QLabel("DDF Dokumenttyp:")
+        self.label_column.addWidget(label)
+        self.ddf_type_input = QLineEdit(self)
+        self.input_column.addWidget(self.ddf_type_input)
+
+        label = QLabel("DDF Untertyp:")
+        self.label_column.addWidget(label)
+        self.ddf_subtype_input = QLineEdit(self)
+        self.input_column.addWidget(self.ddf_subtype_input)
+        
+        label = QLabel("Publikationsdatum:")
+        self.label_column.addWidget(label)
+        self.publication_year_input = QLineEdit(self)
+        self.input_column.addWidget(self.publication_year_input)
+
+        label = QLabel("Ort der Publikation:")
+        self.label_column.addWidget(label)
+        self.publication_city_input = QLineEdit(self)
+        self.input_column.addWidget(self.publication_city_input)
+
+        label = QLabel("Verlag:")
+        self.label_column.addWidget(label)
+        self.publisher_input = QLineEdit(self)
+        self.input_column.addWidget(self.publisher_input)
+
+        label = QLabel("Sprache der Publikation:")
+        self.label_column.addWidget(label)
+        self.publication_language_input = QLineEdit(self)
+        self.input_column.addWidget(self.publication_language_input)
+
+
     def _get_metadata(self):
         
         metadata = super()._get_metadata()
         metadata.ddf_prefix = self.ddf_prefix_input.text()
-        metadata.signature = self.signature_input.text()
+        metadata.signatur = self.signature_input.text()
         metadata.source = self.source_input.text()
         metadata.city = self.city_input.text()
         metadata.special_instructions = self.special_instructions_input.text()
+        metadata.mets_type = self.mets_type_input.text()
+        metadata.ddf_type = self.ddf_type_input.text()
+        metadata.ddf_subtype = self.ddf_subtype_input.text()
+
+        metadata.publication_year = self.publication_year_input.text()
+        metadata.publication_city = self.publication_city_input.text()
+        metadata.publisher = self.publisher_input.text()
+        metadata.publication_language = self.publication_language_input.text()
+
+
         return metadata
 
     def _set_metadata(self, metadata: MetaData):
         
         super()._set_metadata(metadata)
-        self.source_input.setText(metadata.source)
         self.ddf_prefix_input.setText(metadata.ddf_prefix)
+        self.signature_input.setText(metadata.signatur)
+        self.source_input.setText(metadata.source)
+        self.city_input.setText(metadata.city)
+        self.special_instructions_input.setText(metadata.special_instructions)
+        self.mets_type_input.setText(metadata.mets_type)
+        self.ddf_type_input.setText(metadata.ddf_type)
+        self.ddf_subtype_input.setText(metadata.ddf_subtype)
+        
+        self.publication_year_input.setText(metadata.publication_year)
+        self.publication_city_input.setText(metadata.publication_city)
+        self.publisher_input.setText(metadata.publisher)
+        self.publication_language_input.setText(metadata.publication_language)
         
 class PropertiesDialog(QDialog):
     '''

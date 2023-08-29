@@ -18,15 +18,12 @@ class Mode(Enum):
     BW=1
     GRAY=2
     COLOR=3
-
-class ScantypeObsolete(Enum):
     
-    SINGLE=1
-    DOUBLE=2
-    DOUBLE_90=3
-    DOUBLE_270=4
-    SHEET_90=5
-    SHEET_270=6
+class ScanPart(Enum):
+    
+    WHOLE = 1
+    LEFT = 2
+    RIGHT = 3
     
 class MissingResolutionInfo(Exception):
     
@@ -69,7 +66,30 @@ class DDFFileType(Enum):
     DISPLAY = 2
     PDF = 3
     METS = 4
-
+    DDFXML = 5
+    
+    def description(self):
+        
+        if self.name == "ARCHIVE":
+            return "longterm archive files"
+        elif self.name == "DISPLAY":
+            return "display files for viewers"
+        elif self.name == "PDF":
+            return "pdf files"
+        elif self.name == "METS":
+            return "metadata files"
+        elif self.name == "DDFXML":
+            return "ddf metadata files"
+        else:
+            raise Exception("Unknown file type!")
+        
+    def directory(self):
+        
+        if self.name == "METS" or self.name == "DDFXML":
+            return "."
+        
+        return self.name.lower()
+                
 class DDFFile(object):
     
     def __init__(self, file_type: DDFFileType, sequence_no: str, temp_file_name):
@@ -78,6 +98,7 @@ class DDFFile(object):
         self.sequence_no = sequence_no # may be "00005recto", so the type is string
         self.temp_file_name = temp_file_name
         self.img_object = None
+        self._directory = None
 
     def _generate_file_id(self):
         
@@ -105,6 +126,17 @@ class DDFFile(object):
             return "application/xml"
         
         raise Exception("Unknown file type %s" % self.file_type)
+    
+    def _get_directory(self):
+        
+        if self._directory is None:
+            return self.file_type.directory()
+        
+        return self._directory
+    
+    def _set_directory(self, directory):
+        
+        self._directory = directory 
         
     def _generate_alto_file_id(self):
         
@@ -136,8 +168,9 @@ class DDFFile(object):
     mime_type = property(_get_mime_type)
     basename = property(lambda self: os.path.basename(self.temp_file_name))
     alto_basename = property(lambda self: os.path.basename(self.alto_file_name))
-    zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.basename))
-    alto_zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.alto_basename))
+    #zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.basename))
+    #alto_zip_location = property(lambda self: os.path.join(self.file_type.name.lower(), self.alto_basename))
+    directory = property(_get_directory, _set_directory)
 
 class ProjectProperties(object):
     
@@ -253,6 +286,12 @@ class Scan(object):
         if angle == 90:
             return img.transpose(Image.ROTATE_270)
         
+
+    
+    def __eq__(self, other):
+        
+        return self.filename == other.filename
+
     source_resolution = property(lambda self: self.resolution)
 
 class NoRegionsOnPageException(Exception):
@@ -278,10 +317,12 @@ class Page:
     
     def __init__(self, 
                  scan: Scan,
+                 scan_part: ScanPart,
                  region: Region,
                  rotation_angle: int=0):
         
         self.scan = scan
+        self.scan_part = scan_part
         self.main_region = region
         if rotation_angle not in (0, 90, 180, 270):
             raise IllegalRotationAngle()
@@ -413,6 +454,15 @@ class MetaData(object):
         self.source = "Feministisches Archiv Freiburg"
         self.city = "Freiburg im Breisgau"
         self.special_instructions = "Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend"
+        self.mets_type = "volume"
+        self.ddf_type = "Visuelle Materialien"
+        self.ddf_subtype = "Plakat / Flugblatt"
+        
+        self.publication_year = ""
+        self.publication_city = ""
+        self.publisher = ""
+        self.publication_language = "deutsch"
+        
 
     def as_pdf_metadata_dict(self):
         

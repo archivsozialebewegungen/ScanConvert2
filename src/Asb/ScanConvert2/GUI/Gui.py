@@ -370,7 +370,7 @@ class Window(QMainWindow):
         
         self.ddf_metadata_dialog.metadata = self.project.metadata
         if self.ddf_metadata_dialog.exec():
-            self.project.metadata = self.metadata_dialog.metadata
+            self.project.metadata = self.ddf_metadata_dialog.metadata
     
     def cb_edit_properties(self):
         
