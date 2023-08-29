@@ -226,7 +226,7 @@ class Sauvola(ThresholdAlgorithm):
     """
     
     def transform(self, img:Image, bg_color):
-        return self.apply_cv2_mask(img, threshold_sauvola, bg_color, window_size=51)
+        return self.apply_cv2_mask(img, threshold_sauvola, bg_color, window_size=101)
     
 class Niblack(ThresholdAlgorithm):
     """

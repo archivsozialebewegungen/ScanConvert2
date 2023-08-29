@@ -251,24 +251,29 @@ class PropertiesDialog(QDialog):
         
         self.setLayout(layout)
 
+        self.properties = None
     def _get_properties(self):
         
-        properties = ProjectProperties()
+        if self.properties is None:
+            raise Exception("Properties must be set before read.")
+        
         try:
-            properties.pdf_resolution = int(self.pdf_resolution_input.text())
+            self.properties.pdf_resolution = int(self.pdf_resolution_input.text())
         except:
             pass
         try:
-            properties.tif_resolution = int(self.tif_resolution_input.text())
+            self.properties.tif_resolution = int(self.tif_resolution_input.text())
         except:
             pass
-        properties.run_ocr = self.run_ocr_checkbox.isChecked()
-        properties.ocr_lang = self.ocr_lang_select.currentText()
-        properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
-        properties.normalize_background_colors = self.color_normalization_checkbox.isChecked()
-        return properties
+        self.properties.run_ocr = self.run_ocr_checkbox.isChecked()
+        self.properties.ocr_lang = self.ocr_lang_select.currentText()
+        self.properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
+        self.properties.normalize_background_colors = self.color_normalization_checkbox.isChecked()
+        return self.properties
         
     def _set_properties(self, properties: ProjectProperties):
+        
+        self.properties = properties
         
         self.pdf_resolution_input.setText("%s" % properties.pdf_resolution)
         self.tif_resolution_input.setText("%s" % properties.tif_resolution)
