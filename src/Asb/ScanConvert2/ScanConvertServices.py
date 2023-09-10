@@ -558,9 +558,10 @@ class PdfService:
                 # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
                 ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
                 ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
-                document = PdfDocument(ocrmypdf_temp_file)
-                document.set_metadata(project.metadata.as_pdf_metadata_dict())
-                document.save(self._get_file_name(filebase))
+                #document = PdfDocument(ocrmypdf_temp_file)
+                #document.set_metadata(project.metadata.as_pdf_metadata_dict())
+                #document.save(self._get_file_name(filebase))
+                shutil.copy(ocrmypdf_temp_file, self._get_file_name(filebase))
             else:
                 shutil.copy(temp_file, self._get_file_name(filebase))
         
