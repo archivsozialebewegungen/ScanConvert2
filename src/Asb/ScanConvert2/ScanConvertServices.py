@@ -23,7 +23,7 @@ from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
-    DDFFileType
+    DDFFileType, ScanPart
 from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
@@ -32,48 +32,202 @@ import re
 
 INVISIBLE = 3
 
-@singleton
-class METSService(object):
+class XMLGenerator(object):
     
-    def export_mets_data(self, project, projectfiles, output_file_name):
+    def write_document(self, doc, output_file_name):
         
+        with open(output_file_name, "w") as output:
+            output.write(doc.toprettyxml(indent="  "))
+
+
+@singleton
+class METSService(XMLGenerator):
+    
+    archive_file_offset = int((400.0 / 2.54) * 0.5)
+    
+    def export_mets_data(self, file_type: DDFFileType, project: Project, projectfiles, output_file_name):
+        
+        doc = self._create_mets_document(file_type, project, projectfiles)
+        
+        self._write_document(doc, output_file_name)
+        
+        ddf_file =  DDFFile(DDFFileType.METS, "00001", output_file_name)
+        ddf_file.directory = file_type.directory()
+        
+        return ddf_file
+    
+    def _create_mets_document(self, file_type: DDFFileType, project: Project, projectfiles):
+
         doc = Document()
         mets_root = self._create_root_element(doc)
         doc.appendChild(mets_root)
-        file_section = self._create_file_section(doc, projectfiles)
-        mets_root.appendChild(file_section)
-        structural_map = self._create_structural_map(doc, projectfiles)
-        mets_root.appendChild(structural_map)
-        self._write_document(doc, output_file_name)
         
-    def _create_structural_map(self, document, projectfiles):
+        descriptive_metadata_element = self._create_descriptive_metadata_section(doc, project)
+        mets_root.appendChild(descriptive_metadata_element)
+        
+        file_section = self._create_file_section(doc, file_type, projectfiles)
+        mets_root.appendChild(file_section)
+        
+        structural_map = self._create_structural_map(doc, file_type, projectfiles, project)
+        mets_root.appendChild(structural_map)
+        
+        return doc
+        
+    def _create_descriptive_metadata_section(self, document, project):
+        
+        # Boilerplate stuff
+        dms_section = document.createElement("mets:dmdSec")
+        dms_section.setAttribute("ID", "%s_dmds" % project.metadata.ddf_prefix)
+        
+        mdwrap_element = document.createElement("mets:mdWrap")
+        mdwrap_element.setAttribute("MIMETYPE", "text/xml")
+        mdwrap_element.setAttribute("MDTYPE", "MODS")
+        dms_section.appendChild(mdwrap_element)
+        
+        xmldata_element = document.createElement("mets:xmlData")
+        mdwrap_element.appendChild(xmldata_element)
+        
+        mods_element = document.createElement("mods:mods")
+        mods_element.setAttribute("version", "2.3.1")
+        xmldata_element.appendChild(mods_element)
+        
+        if project.metadata.title != "":
+            title_info_element = document.createElement("mods:titleInfo")
+            mods_element.appendChild(title_info_element)
+            title_element = document.createElement("mods:title")
+            title_info_element.appendChild(title_element)
+            title_text_node = document.createTextNode(project.metadata.title)
+            title_element.appendChild(title_text_node)
+        
+        if project.metadata.author != "":
+            name_element = document.createElement("mods:name")
+            name_element.setAttribute("type", "personal")
+            mods_element.appendChild(name_element)
+            name_part_element = document.createElement("mods:namePart")
+            name_element.appendChild(name_part_element)
+            name_text_node = document.createTextNode(project.metadata.author)
+            name_part_element.appendChild(name_text_node)
+            
+        #resource_type_element = document.createElement("mods:typeOfResource")
+        #xmldata_element.appendChild(resource_type_element)
+        #resource_type_element.appendChild(document.createTextNode("text"))
+        
+        return dms_section
+        
+    def _create_structural_map(self, document, file_type, projectfiles, project, use_pointers=True):
         
         structural_map = document.createElement("mets:structMap")
+        structural_map.setAttribute("TYPE", "PHYSICAL")
+        document_div = document.createElement("mets:div")
+        document_div.setAttribute("TYPE", project.metadata.mets_type)
+        document_div.setAttribute("LABEL", project.metadata.title)
+        structural_map.appendChild(document_div)
+
+        page_divs = []
+        no_of_pages = len(project.pages)
+        for i in range(0, no_of_pages):
+            page_div = document.createElement("mets:div")
+            page_div.setAttribute("TYPE", "page")
+            page_div.setAttribute("LABEL", "Seite %d von %d." % ((i + 1), no_of_pages))
+            page_divs.append(page_div)
         
+        self._add_file_pointers(document, page_divs, projectfiles, for_scans=file_type == DDFFileType.ARCHIVE)
+
+        for page_div in page_divs:
+            document_div.appendChild(page_div)
+            
         return structural_map
+    
+    def _add_file_pointers(self, document, page_divs, projectfiles, for_scans=False):
         
-    def _create_file_section(self, document, projectfiles):
+        display_files = self._get_projectfiles_by_type(projectfiles, DDFFileType.DISPLAY)
+        assert(len(display_files) == len(page_divs))
+        
+        for idx in range(0, len(page_divs)):
+            page_div = page_divs[idx]
+            display_file = display_files[idx]
+            if for_scans:
+                archive_file = self._get_archive_file_for_scan(display_file.img_object.scan, projectfiles)
+            else:
+                archive_file = None
+            page_div.appendChild(self._create_file_pointer(document, display_file, archive_file))
+                
+    def _get_archive_file_for_scan(self, scan, projectfiles):
+        
+        for file in projectfiles:
+            
+            if file.file_type != DDFFileType.ARCHIVE:
+                continue
+            if file.img_object == scan:
+                return file
+               
+    def _create_file_pointer(self, document, display_file, archive_file=None):
+
+        file_pointer = document.createElement("mets:fptr")
+        if archive_file is None:
+            file_pointer.setAttribute("FILEID", display_file.file_id)
+        else:
+            file_pointer.appendChild(self._create_sequence_element(document, display_file, archive_file))
+        
+        return file_pointer
+                
+    def _create_sequence_element(self, document, display_file, archive_file):
+
+        sequence = document.createElement("mets:seq")
+        sequence.appendChild(self._create_area_element(document, display_file, archive_file))
+        
+        return sequence
+
+    def _create_area_element(self, document, display_file, archive_file):
+
+        area_coordinates = self._calculate_area_coordinates(display_file.img_object)
+        area = document.createElement("mets:area")
+        area.setAttribute("FILEID", archive_file.file_id)
+        area.setAttribute("SHAPE", "RECT")
+        area.setAttribute("COORDS", "(%d,%d,%d,%d)" % area_coordinates)
+        
+        return area
+                
+    def _calculate_area_coordinates(self, page):
+        
+        if page.scan_part == ScanPart.WHOLE:
+            return (METSService.archive_file_offset,
+                    METSService.archive_file_offset,
+                    METSService.archive_file_offset + int(page.scan.width * (400.0 / page.scan.source_resolution)),
+                    METSService.archive_file_offset + int(page.scan.height * (400.0 / page.scan.source_resolution)))
+        elif page.scan_part == ScanPart.LEFT:
+            return (METSService.archive_file_offset,
+                    METSService.archive_file_offset,
+                    METSService.archive_file_offset + int((page.scan.width / 2.0) * (400.0 / page.scan.source_resolution)),
+                    METSService.archive_file_offset + int(page.scan.height * (400.0 / page.scan.source_resolution)))
+        elif page.scan_part == ScanPart.RIGHT:
+            return (METSService.archive_file_offset + int(page.scan.width / 2.0) + 1,
+                    METSService.archive_file_offset,
+                    METSService.archive_file_offset + int(page.scan.width * (400.0 / page.scan.source_resolution)),
+                    METSService.archive_file_offset + int(page.scan.height * (400.0 / page.scan.source_resolution)))
+        else:
+            raise Exception("Unknown scan part %s " % page.scan_part.name)
+    
+    def _get_projectfiles_by_type(self, projectfiles, file_type):
+        
+        filtered = []
+        for projectfile in projectfiles:
+            if projectfile.file_type == file_type:
+                filtered.append(projectfile)
+        return filtered
+        
+    def _create_file_section(self, document, file_type, projectfiles):
         
         file_section = document.createElement("mets:fileSec")
         
-        for file_group in self._create_file_groups(document, projectfiles):
-            file_section.appendChild(file_group)
+        file_section.appendChild(self._create_file_group(document, file_type, projectfiles))
         
         return file_section
-    
-    def _create_file_groups(self, document, projectfiles):
-        
-        groups = []
-        
-        for file_type in (DDFFileType.ARCHIVE, DDFFileType.DISPLAY, DDFFileType.PDF):
-            groups.append(self._create_file_group(document, file_type, projectfiles))
-        
-        return groups
     
     def _create_file_group(self, document, file_type, projectfiles):
         
         group_element = document.createElement("mets:fileGrp")
-        group_element.setAttribute("USE", "%s files" % file_type.name.lower())
+        group_element.setAttribute("USE", file_type.description())
         
         for ddf_file in projectfiles:
             
@@ -86,7 +240,7 @@ class METSService(object):
             group_element.appendChild(file_element)
             
             location_element = document.createElement("mets:FLocat")
-            location_element.setAttribute("xlink:href", ddf_file.zip_location)
+            location_element.setAttribute("xlink:href", ddf_file.basename)
             location_element.setAttribute("LOCTYPE", "URL")
             file_element.appendChild(location_element)
 
@@ -96,7 +250,7 @@ class METSService(object):
             group_element.appendChild(file_element)
             
             location_element = document.createElement("mets:FLocat")
-            location_element.setAttribute("xlink:href", ddf_file.alto_zip_location)
+            location_element.setAttribute("xlink:href", ddf_file.alto_basename)
             location_element.setAttribute("LOCTYPE", "URL")
             file_element.appendChild(location_element)
         
@@ -122,10 +276,10 @@ class METSService(object):
 @singleton
 class IPTCService(object):
     
-    SOURCE = "IPTC:Source"
-    CITY = "IPTC:City"
-    SPECIAL_INSTRUCTIONS = "IPTC:SpecialInstructions"
-    CATALOG_SETS = "IPTC:CatalogSets"
+    SOURCE = "1IPTC:Source"
+    CITY = "1IPTC:City"
+    SPECIAL_INSTRUCTIONS = "1IPTC:SpecialInstructions"
+    CATALOG_SETS = "1IPTC:CatalogSets"
     
     def write_iptc_tags(self, filename, tags):
         
@@ -404,9 +558,10 @@ class PdfService:
                 # ocrmypdf.configure_logging(verbosity=Verbosity.quiet)
                 ocrmypdf_temp_file = os.path.join(temp_dir, "ocrmypdf_output.pdf")
                 ocrmypdf.ocr(temp_file, ocrmypdf_temp_file, skip_text=True)
-                document = PdfDocument(ocrmypdf_temp_file)
-                document.set_metadata(project.metadata.as_pdf_metadata_dict())
-                document.save(self._get_file_name(filebase))
+                #document = PdfDocument(ocrmypdf_temp_file)
+                #document.set_metadata(project.metadata.as_pdf_metadata_dict())
+                #document.save(self._get_file_name(filebase))
+                shutil.copy(ocrmypdf_temp_file, self._get_file_name(filebase))
             else:
                 shutil.copy(temp_file, self._get_file_name(filebase))
         
@@ -508,7 +663,7 @@ class TiffService(ExportService):
 
 
 @singleton
-class DDFService(ExportService):
+class DDFService(ExportService, XMLGenerator):
     
     @inject
     def __init__(self,
@@ -538,27 +693,29 @@ class DDFService(ExportService):
             self._join_alto_files(projectfiles, "%s.alto" % pdf_file.temp_file_name)
             projectfiles.append(pdf_file)
             
-            mets_file_name = os.path.join(tempdir, "%s.mets" % project.metadata.ddf_prefix)
-            self.mets_service.export_mets_data(project, projectfiles, mets_file_name)
-            projectfiles.append(DDFFile(DDFFileType.METS, None, mets_file_name))
+            mets_file_name = os.path.join(tempdir, "%s_display.mets" % project.metadata.ddf_prefix)
+            mets_file = self.mets_service.export_mets_data(DDFFileType.DISPLAY, project, projectfiles, mets_file_name)
+            projectfiles.append(mets_file)
             
+            mets_file_name = os.path.join(tempdir, "%s_archive.mets" % project.metadata.ddf_prefix)
+            mets_file = self.mets_service.export_mets_data(DDFFileType.ARCHIVE, project, projectfiles, mets_file_name)
+            projectfiles.append(mets_file)
+            
+            ddf_xml_file_name = os.path.join(tempdir, "%s_ddf.xml" % project.metadata.ddf_prefix)
+            ddf_xml_file = self._write_ddf_xml(project, ddf_xml_file_name)
+            projectfiles.append(ddf_xml_file)
+
             self._create_zip_file(filebase, projectfiles)
     
     def _create_zip_file(self, filebase, projectfiles):
 
         zipfile = ZipFile(self._get_file_name(filebase, "zip"), mode='w')
         for ddf_file in projectfiles:
-            if ddf_file.file_type == DDFFileType.ARCHIVE:
-                zipfile.write(ddf_file.temp_file_name, "archive/%s" % os.path.basename(ddf_file.temp_file_name))
-                zipfile.write(ddf_file.alto_file_name, "archive/%s" % os.path.basename(ddf_file.alto_file_name))
-            elif ddf_file.file_type == DDFFileType.DISPLAY:
-                zipfile.write(ddf_file.temp_file_name, "display/%s" % os.path.basename(ddf_file.temp_file_name))
-                zipfile.write(ddf_file.alto_file_name, "display/%s" % os.path.basename(ddf_file.alto_file_name))
-            if ddf_file.file_type == DDFFileType.PDF:
-                zipfile.write(ddf_file.temp_file_name, "pdf/%s" % os.path.basename(ddf_file.temp_file_name))
-                zipfile.write(ddf_file.alto_file_name, "pdf/%s" % os.path.basename(ddf_file.alto_file_name))
-            else:
-                zipfile.write(ddf_file.temp_file_name, os.path.basename(ddf_file.temp_file_name))
+            zipfile.write(ddf_file.temp_file_name, "%s/%s" % (ddf_file.directory, os.path.basename(ddf_file.temp_file_name)))
+            try:
+                zipfile.write(ddf_file.alto_file_name, "%s/%s" % (ddf_file.directory, os.path.basename(ddf_file.alto_file_name)))
+            except:
+                pass
         zipfile.close()
         
     def _write_scans(self, project, tempdir):
@@ -598,6 +755,7 @@ class DDFService(ExportService):
                 scan_file_name = "%s%s.tif" % (file_prefix, sequence_no)
                 file_name = os.path.join(tempdir, scan_file_name)
                 ddf_file = DDFFile(DDFFileType.ARCHIVE, sequence_no, file_name)
+                ddf_file.img_object = scan
                 projectfiles.append(ddf_file)
 
                 img = self.finishing_service.create_scaled_image(scan, 400)
@@ -639,7 +797,71 @@ class DDFService(ExportService):
                 self.iptc_service.write_iptc_tags(file_name, iptc_tags)
     
             return projectfiles
+        
+    def _write_ddf_xml(self, project, output_file_name):
+        
+        doc = Document()
+        
+        freiburg_element = doc.createElement("freiburg")
+        doc.appendChild(freiburg_element)
 
+        datensatz_element = doc.createElement("datensatz")
+        freiburg_element.appendChild(datensatz_element)
+        
+        format_element = doc.createElement("format")
+        format_element_text = doc.createTextNode(project.metadata.ddf_type)
+        format_element.appendChild(format_element_text)
+        datensatz_element.appendChild(format_element)
+
+        subformat_element = doc.createElement("unterangabe_zu_format")
+        subformat_element_text = doc.createTextNode(project.metadata.ddf_subtype)
+        subformat_element.appendChild(subformat_element_text)
+        datensatz_element.appendChild(subformat_element)
+        
+        title_element = doc.createElement("titel")
+        title_element_text = doc.createTextNode(project.metadata.title)
+        title_element.appendChild(title_element_text)
+        datensatz_element.appendChild(title_element)
+
+        author_element = doc.createElement("author")
+        author_element_text = doc.createTextNode(project.metadata.author)
+        author_element.appendChild(author_element_text)
+        datensatz_element.appendChild(author_element)
+
+        publication_year_element = doc.createElement("displayPublishDate")
+        publication_year_element_text = doc.createTextNode(project.metadata.publication_year)
+        publication_year_element.appendChild(publication_year_element_text)
+        datensatz_element.appendChild(publication_year_element)
+
+        publication_city_element = doc.createElement("placeOfPublication")
+        publication_city_element_text = doc.createTextNode(project.metadata.publication_city)
+        publication_city_element.appendChild(publication_city_element_text)
+        datensatz_element.appendChild(publication_city_element)
+
+        publisher_element = doc.createElement("publisher")
+        publisher_element_text = doc.createTextNode(project.metadata.publisher)
+        publisher_element.appendChild(publisher_element_text)
+        datensatz_element.appendChild(publisher_element)
+
+        publication_language_element = doc.createElement("language")
+        publication_language_element_text = doc.createTextNode(project.metadata.publication_language)
+        publication_language_element.appendChild(publication_language_element_text)
+        datensatz_element.appendChild(publication_language_element)
+
+        keywords_element = doc.createElement("schlagwort")
+        keywords_element_text = doc.createTextNode(project.metadata.keywords)
+        keywords_element.appendChild(keywords_element_text)
+        datensatz_element.appendChild(keywords_element)
+
+        signature_element = doc.createElement("signatur")
+        signature_element_text = doc.createTextNode(project.metadata.signatur)
+        signature_element.appendChild(signature_element_text)
+        signature_element.appendChild(signature_element)
+
+        self.write_document(doc, output_file_name)
+
+        return DDFFile(DDFFileType.DDFXML, None, output_file_name)
+        
     def _write_alto_file(self, img, file_name, ocr_lang):
         
         alto_dom = self.ocr_runner.run_tesseract_for_alto(img, ocr_lang)

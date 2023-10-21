@@ -6,7 +6,7 @@ Created on 04.11.2022
 from injector import inject, singleton
 
 from Asb.ScanConvert2.ScanConvertDomain import Page, Region, \
-    Scan, Project, ProjectProperties
+    Scan, Project, ProjectProperties, ScanPart
 from enum import Enum
     
 class SortType(Enum):
@@ -83,28 +83,30 @@ class PagesGenerator(object):
         elif scan_rotation == 270:
             return self._90_degrees_region_rotation(scans, alternating)
 
-    def _get_whole(self, scan: Scan, angle: int = 0):
+    def _get_whole(self, scan: Scan, scan_part: ScanPart, angle: int = 0):
         
-        return Page(scan, Region(0,0,scan.width,scan.height), angle)
+        return Page(scan, scan_part, Region(0,0,scan.width,scan.height), angle)
     
-    def _get_left(self, scan: Scan, angle: int = 0):
+    def _get_left(self, scan: Scan, scan_part: ScanPart, angle: int = 0):
     
-        return Page(scan, Region(0, 0, round(scan.width/2.0), scan.height), angle)
+        return Page(scan, scan_part, Region(0, 0, round(scan.width/2.0), scan.height), angle)
     
-    def _get_right(self, scan: Scan, angle: int = 0):
+    def _get_right(self, scan: Scan, scan_part: ScanPart, angle: int = 0):
         
         return Page(scan,
+                    scan_part,
                     Region(round(scan.width/2.0)+1, 0,
                            scan.width-round(scan.width/2.0), scan.height),
                     angle)
         
-    def _get_top(self, scan: Scan, angle: int = 0):
+    def _get_top(self, scan: Scan, scan_part: ScanPart, angle: int = 0):
 
-        return Page(scan, Region(0, 0, scan.width, round(scan.height/2.0)), angle)
+        return Page(scan, scan_part, Region(0, 0, scan.width, round(scan.height/2.0)), angle)
 
-    def _get_bottom(self, scan: Scan, angle: int = 0):
+    def _get_bottom(self, scan: Scan, scan_part: ScanPart, angle: int = 0):
 
         return Page(scan,
+                    scan_part,
                     Region(0,round(scan.height/2.0)+1,
                            scan.width, scan.height-round(scan.height/2.0)),
                     angle)
@@ -116,16 +118,16 @@ class PagesGenerator(object):
         for scan in scans:
             if next_rotation == 0:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 0))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 0))
                 else:
-                    pages.append(self._get_left(scan, 0))
-                    pages.append(self._get_right(scan, 0))
+                    pages.append(self._get_left(scan, ScanPart.LEFT, 0))
+                    pages.append(self._get_right(scan, ScanPart.RIGHT, 0))
             else:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 180))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 180))
                 else:
-                    pages.append(self._get_right(scan, 180))
-                    pages.append(self._get_left(scan, 180))
+                    pages.append(self._get_right(scan, ScanPart.LEFT, 180))
+                    pages.append(self._get_left(scan, ScanPart.RIGHT, 180))
             if alternating:
                 next_rotation = self.rotation_alternating[next_rotation]
         return pages
@@ -137,16 +139,16 @@ class PagesGenerator(object):
         for scan in scans:
             if next_rotation == 90:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 90))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 90))
                 else:
-                    pages.append(self._get_bottom(scan, 90))
-                    pages.append(self._get_top(scan, 90))
+                    pages.append(self._get_bottom(scan, ScanPart.LEFT, 90))
+                    pages.append(self._get_top(scan, ScanPart.RIGHT, 90))
             else:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 270))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 270))
                 else:
-                    pages.append(self._get_top(scan, 270))
-                    pages.append(self._get_bottom(scan, 270))
+                    pages.append(self._get_top(scan, ScanPart.LEFT, 270))
+                    pages.append(self._get_bottom(scan, ScanPart.RIGHT, 270))
             if alternating:
                 next_rotation = self.rotation_alternating[next_rotation]
         return pages
@@ -158,16 +160,16 @@ class PagesGenerator(object):
         for scan in scans:
             if next_rotation == 180:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 180))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 180))
                 else:
-                    pages.append(self._get_right(scan, 180))
-                    pages.append(self._get_left(scan, 180))
+                    pages.append(self._get_right(scan, ScanPart.LEFT, 180))
+                    pages.append(self._get_left(scan, ScanPart.RIGHT, 180))
             else:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 0))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 0))
                 else:
-                    pages.append(self._get_left(scan, 0))
-                    pages.append(self._get_right(scan, 0))
+                    pages.append(self._get_left(scan, ScanPart.LEFT, 0))
+                    pages.append(self._get_right(scan, ScanPart.RIGHT, 0))
             if alternating:
                 next_rotation = self.rotation_alternating[next_rotation]
         return pages
@@ -179,16 +181,16 @@ class PagesGenerator(object):
         for scan in scans:
             if next_rotation == 270:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 270))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 270))
                 else:
-                    pages.append(self._get_top(scan, 270))
-                    pages.append(self._get_bottom(scan, 270))
+                    pages.append(self._get_top(scan, ScanPart.LEFT, 270))
+                    pages.append(self._get_bottom(scan, ScanPart.RIGHT, 270))
             else:
                 if scan.no_of_pages == 1:
-                    pages.append(self._get_whole(scan, 90))
+                    pages.append(self._get_whole(scan, ScanPart.WHOLE, 90))
                 else:
-                    pages.append(self._get_bottom(scan, 90))
-                    pages.append(self._get_top(scan, 90))
+                    pages.append(self._get_bottom(scan, ScanPart.LEFT, 90))
+                    pages.append(self._get_top(scan, ScanPart.RIGHT, 90))
             if alternating:
                 next_rotation = self.rotation_alternating[next_rotation]
         return pages

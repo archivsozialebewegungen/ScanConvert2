@@ -46,6 +46,7 @@ class Algorithm(Enum):
     ERASE=10
     STENCIL_PRINT_GOOD=11
     STENCIL_PRINT_BAD=12
+    FOUR_COLORS=13
 
     
     def __str__(self):
@@ -61,7 +62,8 @@ class Algorithm(Enum):
             Algorithm.TWO_COLOR_QUANTIZATION: "Farbiger Text auf farbigem Papier",
             Algorithm.ERASE: "Ausradieren",
             Algorithm.STENCIL_PRINT_GOOD: "Guter Matrizendruck",
-            Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck"
+            Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck",
+            Algorithm.FOUR_COLORS: "Vier Farben"
         }
     
         return texts[self]
@@ -224,7 +226,7 @@ class Sauvola(ThresholdAlgorithm):
     """
     
     def transform(self, img:Image, bg_color):
-        return self.apply_cv2_mask(img, threshold_sauvola, bg_color, window_size=51)
+        return self.apply_cv2_mask(img, threshold_sauvola, bg_color, window_size=101)
     
 class Niblack(ThresholdAlgorithm):
     """
@@ -294,13 +296,16 @@ class QuantizationAlgorithm(ModeTransformationAlgorithm):
     def _find_bg_color(self, quantized_img: Image) -> ():
 
         colors = quantized_img.getcolors()
-        assert(len(colors) == 2)
-        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
-        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
-        if sum1 < sum0:
-            return colors[0][1] 
-        else: 
-            return colors[1][1] 
+        max_channel_sum = 0
+        max_idx = None
+        
+        for idx in range(0, len(colors)):
+            channel_sum = colors[idx][1][0] + colors[idx][1][1] + colors[idx][1][2]
+            if channel_sum > max_channel_sum:
+                max_channel_sum = channel_sum
+                max_idx = idx
+
+        return colors[max_idx][1] 
     
     def _find_fg_color(self, quantized_img: Image) -> ():
         
@@ -322,6 +327,15 @@ class TwoColors(QuantizationAlgorithm):
             return (img, bg_color)
         return img, calculated_bg_color
         
+class FourColors(QuantizationAlgorithm):
+    
+    def transform(self, img:Image, bg_color):
+        
+        img, calculated_bg_color =  self._apply_quantization(img, 4)
+        if bg_color is not None:
+            img = self.replace_color_with_color(img, calculated_bg_color, bg_color)
+            return (img, bg_color)
+        return img, calculated_bg_color
 
 class ColorTextOnWhite(QuantizationAlgorithm):
     """
@@ -438,6 +452,7 @@ class AlgorithmModule(Module):
                 Algorithm.OTSU: Otsu(),
                 Algorithm.SAUVOLA: Sauvola(),
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
+                Algorithm.FOUR_COLORS: FourColors(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
                 Algorithm.STENCIL_PRINT_GOOD: GoodStencilPrint(),
