@@ -389,12 +389,36 @@ class Page:
         
     def crop_page(self, region: Region):
         # TODO: Rotation angle berücksichtigen
-        old_x = self.main_region.x
-        old_y = self.main_region.y
-        self.main_region.x = old_x + region.x
-        self.main_region.y = old_y + region.y
-        self.main_region.width = region.width
-        self.main_region.height = region.height
+        
+        self.main_region = self._calculate_crop_region(region, self.final_rotation_angle)
+                
+    def _calculate_crop_region(self, region: Region, final_rotation_angle: int):
+        
+        if final_rotation_angle == 0:
+            return Region(self.main_region.x + region.x,
+                          self.main_region.y + region.y,
+                          region.width,
+                          region.height)
+        
+        if final_rotation_angle == 90:
+
+            return Region(region.y,
+                          self.main_region.height - region.width - region.x,
+                          region.height,
+                          region.width)
+
+        if final_rotation_angle == 180:
+
+            return Region(self.main_region.x + self.main_region.width - region.width - region.x,
+                          self.main_region.height - region.height - region.y,
+                          region.width,
+                          region.height)
+        
+
+        return Region(self.main_region.width - region.y - region.height,
+                      self.main_region.y + region.x,
+                      region.height,
+                      region.width)
     
     def _rotate_image(self, img: Image, angle: int) -> Image:
         '''
