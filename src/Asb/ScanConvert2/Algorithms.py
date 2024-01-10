@@ -12,15 +12,13 @@ Created on 18.01.2023
 '''
 from enum import Enum
 
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter
 import cv2
 from injector import Module, BoundKey, provider, singleton
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
     threshold_niblack
 
 import numpy as np
-from math import sqrt
-from numpy.core._multiarray_umath import dtype
 
 Image.MAX_IMAGE_PIXELS = None
 

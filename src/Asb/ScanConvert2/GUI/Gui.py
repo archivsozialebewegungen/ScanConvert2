@@ -9,16 +9,14 @@ import sys
 import tempfile
 
 from PIL import Image
-from PIL.ImageQt import ImageQt
-from PySide6.QtCore import QRect, QSize, QRectF, Qt, QPoint, QThread
-from PySide6.QtGui import QPixmap, QAction, QIcon
-from PySide6.QtWidgets import QGraphicsScene, QRubberBand, \
+from PySide6.QtCore import Qt, QThread
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
-    QWidget, QGraphicsView, QApplication, QComboBox, QFileDialog, QGroupBox, \
+    QWidget, QApplication, QComboBox, QFileDialog, QGroupBox, \
     QButtonGroup, QRadioButton, QCheckBox
 from injector import inject, Injector, singleton
-from networkx.algorithms.bipartite.projection import project
 
 from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
 from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog, \
@@ -33,7 +31,6 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, \
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
 
-
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
@@ -41,6 +38,7 @@ CANCEL_REGION = "Auswahl abbrechen"
 CROP_REGION = "Freistellen"
 
 Image.MAX_IMAGE_PIXELS = None 
+
 
 @singleton
 class FehPreviewer(object):
@@ -62,6 +60,7 @@ class FehPreviewer(object):
     def is_working(self):
         
         return self.feh is not None
+
 
 class PhotoDetectionThread(QThread):
     
@@ -88,7 +87,6 @@ class PhotoDetectionThread(QThread):
         
 @singleton
 class Window(QMainWindow):
-    
 
     @inject
     def __init__(self,
@@ -130,7 +128,6 @@ class Window(QMainWindow):
         central_widget.setLayout(self.main_layout)
 
         self.setCentralWidget(central_widget)
-        
 
     def _get_left_panel(self):
         
@@ -431,8 +428,6 @@ class Window(QMainWindow):
         
         self.cb_edit_ddf_metadata()
         
-
-        
         file_name = QFileDialog.getSaveFileName(parent=self,
                                                 dir=self.project.proposed_zip_file,
                                                 caption="Zip-Datei für das Speichern angeben",
@@ -449,8 +444,6 @@ class Window(QMainWindow):
         
         if not self.project.metadata.reviewed:
             self.cb_edit_metadata()
-        
-
         
         file_name = QFileDialog.getSaveFileName(parent=self,
                                                 dir=self.project.proposed_zip_file,
@@ -476,7 +469,7 @@ class Window(QMainWindow):
         previous_button = QPushButton("Zurück")
         previous_button.clicked.connect(self.previous_page)
         self.page_number_label = QLabel("0/0")
-        self.page_number_label.setAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+        self.page_number_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.page_number_label.setFixedWidth(65)
         next_button = QPushButton("Vor")
         next_button.clicked.connect(self.next_page)
@@ -491,7 +484,7 @@ class Window(QMainWindow):
         previous_button = QPushButton("Zurück")
         previous_button.clicked.connect(self.previous_region)
         self.region_number_label = QLabel("0/0")
-        self.region_number_label.setAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+        self.region_number_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.region_number_label.setFixedWidth(65)
         next_button = QPushButton("Vor")
         next_button.clicked.connect(self.next_region)
@@ -550,7 +543,6 @@ class Window(QMainWindow):
             self.new_region_button.setText(CREATE_REGION)
             self.delete_region_button.setText(DELETE_REGION)
             self._apply_region()
-
             
     def create_region(self):
         """
@@ -558,7 +550,6 @@ class Window(QMainWindow):
         """
         self.graphics_view.region_select = True
         self.graphics_view.reset_rubberband()
-    
     
     def _apply_region(self):
         """
@@ -585,7 +576,7 @@ class Window(QMainWindow):
     
     def delete_region(self):
         
-        del(self.current_page.sub_regions[self.current_page.current_sub_region_no-1])
+        del(self.current_page.sub_regions[self.current_page.current_sub_region_no - 1])
         self.graphics_view.reset_rubberband()
         try:
             self.current_page.first_region()
@@ -618,7 +609,6 @@ class Window(QMainWindow):
         self.current_page.crop_page(self.graphics_view.get_selected_region())
         self.graphics_view.reset_rubberband()
         self.show_page()
-        
         
     def reset_region(self):
         
@@ -679,7 +669,7 @@ class Window(QMainWindow):
                                                           wizard.rotation_alternating,
                                                           wizard.cropping)
             project.metadata = MetaData()
-            project.metadata.subject= "Alle Rechte an diesem Digitalisat liegen beim\nArchiv Soziale Bewegungen e.V., Freiburg"
+            project.metadata.subject = "Alle Rechte an diesem Digitalisat liegen beim\nArchiv Soziale Bewegungen e.V., Freiburg"
             self._init_from_project(project)
         
     def _init_from_project(self, project: Project):
