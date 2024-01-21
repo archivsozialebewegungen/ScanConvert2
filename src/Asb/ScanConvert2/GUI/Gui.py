@@ -36,6 +36,8 @@ APPLY_REGION = "Auswahl übernehmen"
 DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
 CROP_REGION = "Freistellen"
+UNCROP_REGION = "Freistellung aufheben"
+REGION_SELECT_MODE = True
 
 Image.MAX_IMAGE_PIXELS = None 
 
@@ -108,8 +110,9 @@ class Window(QMainWindow):
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
-        self._create_widgets()
         self.project = None
+        self.region_mode = not REGION_SELECT_MODE
+        self._create_widgets()
         
         self.task_manager.message_function()
     
@@ -284,18 +287,21 @@ class Window(QMainWindow):
 
         right_panel_layout = QVBoxLayout()
         page_view_buttons_layout = QHBoxLayout()
-        self.new_region_button = QPushButton(text="Region anlegen")
-        self.new_region_button.clicked.connect(self.create_save_region)
-        self.delete_region_button = QPushButton(text="Region löschen")
-        self.delete_region_button.clicked.connect(self.delete_cancel_region)
-        self.crop_region_button = QPushButton(text=CROP_REGION)
-        self.crop_region_button.clicked.connect(self.crop_region)
+        self.new_region_button = QPushButton()
+        self.new_region_button.clicked.connect(self.cb_create_save_region)
+        self.delete_region_button = QPushButton()
+        self.delete_region_button.clicked.connect(self.cb_delete_cancel_region)
+        self.crop_region_button = QPushButton()
+        self.crop_region_button.clicked.connect(self.cb_crop_uncrop_region)
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
         page_view_buttons_layout.addWidget(self.crop_region_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
+
+        self.set_region_mode(not REGION_SELECT_MODE)
+        
         return right_panel_layout
         
     def _create_menu_bar(self):
@@ -482,12 +488,12 @@ class Window(QMainWindow):
         
         region_scroller = QHBoxLayout()
         previous_button = QPushButton("Zurück")
-        previous_button.clicked.connect(self.previous_region)
+        previous_button.clicked.connect(self.set_previous_as_current_region)
         self.region_number_label = QLabel("0/0")
         self.region_number_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.region_number_label.setFixedWidth(65)
         next_button = QPushButton("Vor")
-        next_button.clicked.connect(self.next_region)
+        next_button.clicked.connect(self.set_next_as_current_region)
         region_scroller.addWidget(previous_button)
         region_scroller.addWidget(self.region_number_label)
         region_scroller.addWidget(next_button)
@@ -500,6 +506,8 @@ class Window(QMainWindow):
         except NoPagesInProjectException:
             return
 
+        self.set_region_mode(not REGION_SELECT_MODE)
+
         self.show_page()
     
     def next_page(self):
@@ -508,13 +516,15 @@ class Window(QMainWindow):
             self.project.next_page()
         except NoPagesInProjectException:
             return
+        
+        self.set_region_mode(not REGION_SELECT_MODE)
 
         self.show_page()
         
-    def next_region(self):
+    def set_next_as_current_region(self):
 
         try:
-            self.current_page.next_region()
+            self.current_page.set_next_as_current_region()
         except NoPagesInProjectException:
             return
         except NoRegionsOnPageException:
@@ -522,73 +532,106 @@ class Window(QMainWindow):
 
         self.show_region()
 
-    def previous_region(self):
+    def set_previous_as_current_region(self):
 
         try:
-            self.current_page.previous_region()
+            self.current_page.set_previous_as_current_region()
         except NoPagesInProjectException:
             return
         except NoRegionsOnPageException:
             return
 
-        self.show_region()    
-
-    def create_save_region(self):
+        self.show_region()
         
-        if self.new_region_button.text() == CREATE_REGION:
+    def set_region_mode(self, mode):
+
+        self.region_mode = mode
+        self.graphics_view.reset_rubberband()
+        
+        if mode == REGION_SELECT_MODE: 
+            
             self.new_region_button.setText(APPLY_REGION)
+            
             self.delete_region_button.setText(CANCEL_REGION)
-            self.create_region()
+            self.delete_region_button.setEnabled(True)
+            
+            self.crop_region_button.setText(CROP_REGION)
+            self.crop_region_button.setEnabled(True)
+            
+            self.graphics_view.region_select = True
+
         else:
             self.new_region_button.setText(CREATE_REGION)
+
             self.delete_region_button.setText(DELETE_REGION)
-            self._apply_region()
+            self.delete_region_button.setEnabled(
+                self.project is not None and len(self.current_page.sub_regions) > 0)
             
-    def create_region(self):
-        """
-        Reset selection an wait for selection
-        """
-        self.graphics_view.region_select = True
-        self.graphics_view.reset_rubberband()
-    
+            self.crop_region_button.setText(UNCROP_REGION)
+            self.crop_region_button.setEnabled(
+                self.project is not None and self.current_page.is_cropped())
+
+            self.graphics_view.region_select = False
+
+        
+    def cb_create_save_region(self):
+        
+        if self.region_mode == REGION_SELECT_MODE:
+            self._apply_region()
+            self.set_region_mode(not REGION_SELECT_MODE)
+        else:
+            self.set_region_mode(REGION_SELECT_MODE)
+            
+        self.show_page()
+            
     def _apply_region(self):
         """
         Selection is finished and we add the selected region to the
         sub regions of the page
         """
-        self.graphics_view.region_select = False
 
         new_region = self.graphics_view.get_selected_region()
         new_region.mode_algorithm = self.current_page.main_algorithm
         self.current_page.sub_regions.append(new_region)
         # TODO: Check if something is selected at all
-        self.current_page.last_region()
-        self.show_region()
+        self.current_page.set_last_as_current_region()
     
-    def delete_cancel_region(self):
+    def cb_delete_cancel_region(self):
         
-        if self.delete_region_button.text() == DELETE_REGION:
-            self.delete_region()
+        if self.region_mode != REGION_SELECT_MODE:
+            self._delete_region()
+            self.current_page.set_first_as_current_region()
+            self.show_region()
         else:
-            self.delete_region_button.setText(DELETE_REGION)
-            self.new_region_button.setText(CREATE_REGION)
-            self.cancel_region()
-    
-    def delete_region(self):
+            self.set_region_mode(not REGION_SELECT_MODE)
+            self.current_page.set_last_as_current_region()
+            self.show_region()
+        
+        
+    def _delete_region(self):
         
         del(self.current_page.sub_regions[self.current_page.current_sub_region_no - 1])
-        self.graphics_view.reset_rubberband()
-        try:
-            self.current_page.first_region()
-        except NoRegionsOnPageException:
-            pass
-        self.show_region()
         
-    def cancel_region(self):
-        
-        self.show_region()
-        self.graphics_view.region_select = False
+    def cb_crop_uncrop_region(self):
+    
+        if self.region_mode == REGION_SELECT_MODE:
+            self._crop_region()
+            self.set_region_mode(not REGION_SELECT_MODE)
+        else:
+            self._uncrop_region()
+            self.set_region_mode(REGION_SELECT_MODE)
+        self.show_page()
 
+    def _crop_region(self):
+        
+        self.graphics_view.get_selected_region()
+        self.current_page.crop_page(self.graphics_view.get_selected_region())
+        self.graphics_view.reset_rubberband()
+        
+    def _uncrop_region(self):
+        
+        self.current_page.uncrop_page()
+        
     def run_photo_detection(self, page: Page):
 
         photo_bboxes = self.photo_detector.find_pictures(page.get_raw_image())
@@ -602,14 +645,7 @@ class Window(QMainWindow):
         page.current_sub_region_no = page.no_of_sub_regions
         if page == self.current_page:
             self.show_page()
-    
-    def crop_region(self):
-        
-        self.graphics_view.get_selected_region()
-        self.current_page.crop_page(self.graphics_view.get_selected_region())
-        self.graphics_view.reset_rubberband()
-        self.show_page()
-        
+            
     def reset_region(self):
         
         self.current_page.reset_region()
@@ -653,10 +689,12 @@ class Window(QMainWindow):
                 break
 
         try:
-            self.current_page.first_region()
+            self.current_page.set_first_as_current_region()
         except NoRegionsOnPageException:
             pass
-        self.show_region()
+        
+        if self.region_mode != REGION_SELECT_MODE:
+            self.show_region()
 
     def cb_new_project(self):
         

@@ -323,7 +323,7 @@ class Page:
         
         self.scan = scan
         self.scan_part = scan_part
-        self.main_region = region
+        self.main_region = self.initial_main_region = region
         if rotation_angle not in (0, 90, 180, 270):
             raise IllegalRotationAngle()
         self.rotation_angle = rotation_angle
@@ -332,19 +332,19 @@ class Page:
         self.skip_page = False
         self.current_sub_region_no = 0
  
-    def first_region(self):
+    def set_first_as_current_region(self):
         
         if len(self.sub_regions) == 0:
             raise NoRegionsOnPageException
         self.current_sub_region_no = 1
         
-    def last_region(self):
+    def set_last_as_current_region(self):
         
         if len(self.sub_regions) == 0:
             raise NoRegionsOnPageException
         self.current_sub_region_no = self.no_of_sub_regions
         
-    def next_region(self):
+    def set_next_as_current_region(self):
         
         if len(self.sub_regions) == 0:
             raise NoRegionsOnPageException
@@ -354,7 +354,7 @@ class Page:
         else:
             self.current_sub_region_no += 1
 
-    def previous_region(self):
+    def set_previous_as_current_region(self):
         
         if len(self.sub_regions) == 0:
             raise NoRegionsOnPageException
@@ -391,6 +391,14 @@ class Page:
         # TODO: Rotation angle berücksichtigen
         
         self.main_region = self._calculate_crop_region(region, self.final_rotation_angle)
+
+    def uncrop_page(self):
+        
+        self.main_region = self.initial_main_region
+        
+    def is_cropped(self) -> bool:
+        
+        return self.main_region != self.initial_main_region
                 
     def _calculate_crop_region(self, region: Region, final_rotation_angle: int):
         
