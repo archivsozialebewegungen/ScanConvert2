@@ -19,6 +19,7 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
     threshold_niblack
 
 import numpy as np
+from PIL.ImageOps import invert
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -47,6 +48,7 @@ class Algorithm(Enum):
     STENCIL_PRINT_GOOD=11
     STENCIL_PRINT_BAD=12
     FOUR_COLORS=13
+    INVERT=14
 
     
     def __str__(self):
@@ -63,7 +65,8 @@ class Algorithm(Enum):
             Algorithm.ERASE: "Ausradieren",
             Algorithm.STENCIL_PRINT_GOOD: "Guter Matrizendruck",
             Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck",
-            Algorithm.FOUR_COLORS: "Vier Farben"
+            Algorithm.FOUR_COLORS: "Vier Farben",
+            Algorithm.INVERT: "Invertieren"
         }
     
         return texts[self]
@@ -435,6 +438,15 @@ class Erase(ModeTransformationAlgorithm):
         img.info['dpi'] = (resolution, resolution)
         
         return (img, None)
+
+class InvertAlgorithm(ModeTransformationAlgorithm):
+    """
+    This implementation does nothing to the image.
+    """
+    
+    def transform(self, img:Image, bg_color)->Image:
+
+        return (invert(img), None)
     
 class AlgorithmModule(Module):
     """
@@ -457,4 +469,5 @@ class AlgorithmModule(Module):
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
                 Algorithm.STENCIL_PRINT_GOOD: GoodStencilPrint(),
                 Algorithm.STENCIL_PRINT_BAD: BadStencilPrint(),
-                Algorithm.ERASE: Erase()}
+                Algorithm.ERASE: Erase(),
+                Algorithm.INVERT: InvertAlgorithm()}
