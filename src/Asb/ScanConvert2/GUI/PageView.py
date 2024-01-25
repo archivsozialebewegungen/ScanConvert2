@@ -40,16 +40,24 @@ class PageViewBase(object):
     def _get_img_screen_ratio(self):
 
         img_size = self._get_page_img_size()
+        img_ratio = img_size[0] / img_size[1]
         screen_size = self._get_screen_img_size()
+        screen_ratio = screen_size[0] / screen_size[1]
+        assert (abs(img_ratio - screen_ratio) < 0.0001)
         
-        x_ratio = img_size[0] / screen_size[0]
-        y_ratio = img_size[1] / screen_size[1]
+        if self.geometry().width() == screen_size[0]:
+            ratio = img_size[0] / screen_size[0]
+        else:
+            assert(self.geometry().height() == screen_size[1])
+            ratio = img_size[1] / screen_size[1]
         
-        # Assert that x and y ratio are nearly
-        # the same (allow for minor rounding differences)
-        assert(abs((x_ratio / y_ratio) - 1) < 0.05)
+        calculated_width = screen_size[0] * ratio
+        calculated_height = screen_size[1] * ratio
         
-        return x_ratio
+        assert(abs(calculated_width - img_size[0]) < 0.0001)
+        assert(abs(calculated_height - img_size[1]) < 0.0001)
+        
+        return ratio
 
     def _calculate_img_region(self):
 
@@ -105,12 +113,19 @@ class PageView(QGraphicsView, PageViewBase):
         
         (sel_x1,  sel_y1, sel_x2, sel_y2) = self.rubberBand.geometry().getCoords()
         
-        return(sel_x1, sel_y1, sel_x2 - sel_x1, sel_y2 - sel_y1)
+        return(sel_x1, sel_y1, sel_x2 - sel_x1 + 1, sel_y2 - sel_y1 + 1)
 
     def _get_screen_img_size(self):
         
         scale = self._get_scale()
-        return (round(self.img.size[0] * scale), round(self.img.size[1] * scale))
+        width = self.img.size[0] * scale 
+        height = self.img.size[1] * scale
+        
+        geometry = self.geometry()
+        assert((height == geometry.height() and width < geometry.width()) or
+               (height < geometry.height() and width == geometry.width())) 
+        
+        return (width, height)
 
     def _get_page_img_size(self):
         

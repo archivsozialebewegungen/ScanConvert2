@@ -317,8 +317,7 @@ class Window(BaseWindow):
     def __init__(self,
                  project_service: ProjectService,
                  task_manager: TaskManager,
-                 previewer: FehPreviewer,
-                 photo_detector: PictureDetector):
+                 previewer: FehPreviewer):
 
         super().__init__()
         
