@@ -5,8 +5,10 @@ Created on 11.02.2023
 '''
 import unittest
 from Base import BaseTest
-from Asb.ScanConvert2.ScanConvertDomain import Scan, Page, Region, Project
+from Asb.ScanConvert2.ScanConvertDomain import Scan, Page, Region, Project,\
+    ScanPart, ProjectProperties
 import os
+from Asb.ScanConvert2.ProjectGenerator import SortType
 
 
 class TestProject(BaseTest):
@@ -16,8 +18,9 @@ class TestProject(BaseTest):
         
         super().setUp()
         scan = Scan(os.path.join(self.test_file_dir, "Single000", "Seite1.png"))
-        page = Page(scan, Region(0, 0, scan.width, scan.height))
-        self.project = Project((page,))
+        page = Page(scan, ScanPart.WHOLE, Region(0, 0, scan.width, scan.height))
+        project_properties = ProjectProperties(1, SortType.STRAIGHT, 0, False)
+        self.project = Project((scan,), (page,), project_properties)
 
     def testNameI(self):
         self.assertEqual(

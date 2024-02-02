@@ -1,0 +1,50 @@
+Export von Scan-Daten im METS-Format
+====================================
+
+METS steht für metadata encoding and transmission standard.
+Es ist letztlich ein relativ komplexes XML-Format, in dem
+Metadaten für digitale Objekte abgelegt werden kann. Wenn
+man den METS-Exporter verwendet, werden die Scans des Projektes
+oder bestimmte Derivate davon zusammen mit einer xml-Datei
+in ein zip-Archiv gepackt.
+
+Unsere Implementierung legt eine METS-Datei mit der folgenden
+Grundstruktur an:
+
+    <mets:mets>
+      <mets:dmdSec/>
+      <mets:fileSec/>
+      <mets:structMap/>
+    </mets:mets>
+    
+In der dmd-Sektion erfassen wir den Titel des Dokuments und
+eventuelle Autor:innen.
+
+In der file-Sektion werden alle Dateien
+aufgelistet. Das können entweder die Rohscans im Projekt sein
+oder die im Projekt angelegten (und bearbeiteten) Seiten sein.
+Das erstere dient der Langzeitarchivierung (Typ archive), das
+zweitere ist für den täglichen Gebrauch (Typ display) gedacht.
+
+Die Archivdateien werden im tif-Format gespeichert, die Anzeigedateien
+im jpg-Format. Die Dateien enthalten ausser den eigentliche
+Bilddaten zusätzlich Metadaten. Für jpg-Dateien werden diese im
+EXIF-Format abgelegt, für TIFF werden baseline tags verwendet.
+
+Außerdem gibt es für jede Seite noch eine XML-Datei im alto
+Format, in der die Ergebnisse der Texterkennung abgelegt sind.
+
+
+Die struct-Sektion enthält dann einen Strukturplan des entsprechenden
+digitalisierten Objekts. Für unseren Scan-Konvertierer ist das
+immer eine sehr einfache Struktur: Es sind die Seiten des Projekts
+in der korrekten Reihenfolge. Dieser Strukturplan
+ist offenkundig sowohl für beide Typen identisch. Sie
+unterscheiden sich nur durch die Dateien, auf die sie verweisen.
+Für die Langzeitarchivierung wird auf die Rohscans verwiesen, wobei 
+die Position der jeweiligen Seite mit Hilfe eine <area>-Elements
+genauer spezifiert wird. Das ist wichtig für Scans, die zwei
+Seiten enthalten oder wo die Seiten noch manuell zugeschnitten wurden.
+Für die Gebrauchsarchivierung werden die Seiten einzeln herausgeschrieben
+und benötigen deshalb kein <area>-Element.
+

@@ -68,6 +68,7 @@ class OCRServiceTest(BaseTest):
             2,
             SortType.STRAIGHT,
             0,
+            False,
             False
         )
         project_service.export_pdf(project, "/tmp/ocr600.pdf")

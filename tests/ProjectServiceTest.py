@@ -54,6 +54,7 @@ class ProjectServiceTest(BaseTest):
                                                  1,
                                                  SortType.STRAIGHT,
                                                  0,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -68,6 +69,7 @@ class ProjectServiceTest(BaseTest):
                                                  1,
                                                  SortType.STRAIGHT,
                                                  90,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -82,6 +84,7 @@ class ProjectServiceTest(BaseTest):
                                                  1,
                                                  SortType.STRAIGHT,
                                                  180,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -96,6 +99,7 @@ class ProjectServiceTest(BaseTest):
                                                  1,
                                                  SortType.STRAIGHT,
                                                  270,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -113,6 +117,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT,
                                                  0,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -129,6 +134,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  0,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -145,6 +151,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  270,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -161,6 +168,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  180,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -177,6 +185,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  90,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -193,7 +202,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  0,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -209,7 +219,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  90,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -225,7 +236,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  0,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -241,7 +253,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.STRAIGHT_WITH_TITLE,
                                                  270,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -258,6 +271,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  0,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -274,6 +288,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  90,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -290,6 +305,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  180,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -306,6 +322,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  270,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -322,7 +339,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  0,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
         
@@ -338,7 +356,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  90,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -354,7 +373,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  180,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -370,7 +390,8 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET,
                                                  270,
-                                                 True)
+                                                 True,
+                                                 False)
 
         self.assert_project(self.project_service, project)
 
@@ -386,6 +407,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET_ALL_FRONT_ALL_BACK,
                                                  0,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -402,6 +424,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET_ALL_FRONT_ALL_BACK,
                                                  90,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -418,6 +441,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET_ALL_FRONT_ALL_BACK,
                                                  180,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)
@@ -434,6 +458,7 @@ class ProjectServiceTest(BaseTest):
                                                  2,
                                                  SortType.SHEET_ALL_FRONT_ALL_BACK,
                                                  270,
+                                                 False,
                                                  False)
 
         self.assert_project(self.project_service, project)

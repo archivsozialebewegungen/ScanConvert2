@@ -78,7 +78,7 @@ class PictureDetector(object):
 
         threshold = 13
 
-        bw_new = np.ones((labels.shape), dtype=np.bool)
+        bw_new = np.ones((labels.shape), dtype=bool)
         for shape_identifier in range(1, no_of_components):
             if sizes[shape_identifier] > threshold:
                 bw_new[labels == shape_identifier] = 0

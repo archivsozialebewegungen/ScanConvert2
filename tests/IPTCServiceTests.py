@@ -8,9 +8,8 @@ from Base import BaseTest
 import tempfile
 import os
 from shutil import copyfile
-from time import sleep
 from Asb.ScanConvert2.ScanConvertServices import IPTCService
-
+from iptcinfo3 import IPTCInfo
 
 class Test(BaseTest):
 
@@ -35,8 +34,16 @@ class Test(BaseTest):
             copyfile(self.jpg_test_file_source, test_file_jpg)
             self.iptc_service.write_iptc_tags(test_file_tif, iptc_tags)
             self.iptc_service.write_iptc_tags(test_file_jpg, iptc_tags)
-            sleep(5000) 
-
+            tiff_info = IPTCInfo(test_file_tif)
+            jpg_info = IPTCInfo(test_file_jpg)
+            self.assertEqual(b'Feministisches Archiv Freiburg', tiff_info["source"])
+            self.assertEqual(b'Freiburg im Breisgau', tiff_info["city"])
+            self.assertEqual(b'Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend', tiff_info["special instructions"])
+            self.assertEqual(b'12.0.1: Anti-AKW- und Oekologiebewegung', tiff_info[255])
+            self.assertEqual(b'Feministisches Archiv Freiburg', jpg_info["source"])
+            self.assertEqual(b'Freiburg im Breisgau', jpg_info["city"])
+            self.assertEqual(b'Erstellt mit Mitteln des Bundesministeriums fuer Familie, Senioren, Frauen und Jugend', jpg_info["special instructions"])
+            self.assertEqual(b'12.0.1: Anti-AKW- und Oekologiebewegung', jpg_info[255])
 
 if __name__ == "__main__":
     # import sys;sys.argv = ['', 'Test.testName']
