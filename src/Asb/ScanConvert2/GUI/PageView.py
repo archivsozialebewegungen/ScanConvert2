@@ -48,7 +48,7 @@ class PageViewBase(object):
         if self.geometry().width() == screen_size[0]:
             ratio = img_size[0] / screen_size[0]
         else:
-            assert(self.geometry().height() == screen_size[1])
+            #assert(self.geometry().height() == screen_size[1])
             ratio = img_size[1] / screen_size[1]
         
         calculated_width = screen_size[0] * ratio
@@ -122,8 +122,8 @@ class PageView(QGraphicsView, PageViewBase):
         height = self.img.size[1] * scale
         
         geometry = self.geometry()
-        assert((height == geometry.height() and width < geometry.width()) or
-               (height < geometry.height() and width == geometry.width())) 
+        #assert((height == geometry.height() and width < geometry.width()) or
+        #       (height < geometry.height() and width == geometry.width())) 
         
         return (width, height)
 
