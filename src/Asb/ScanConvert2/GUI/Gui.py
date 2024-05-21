@@ -37,6 +37,8 @@ DELETE_REGION = "Region löschen"
 CANCEL_REGION = "Auswahl abbrechen"
 CROP_REGION = "Freistellen"
 UNCROP_REGION = "Freistellung aufheben"
+CROP_ALL_REGION = "Alle Freistellen"
+UNCROP_ALL_REGION = "Alle Freistellungen aufheben"
 REGION_SELECT_MODE = True
 
 Image.MAX_IMAGE_PIXELS = None 
@@ -258,9 +260,11 @@ class BaseWindow(QMainWindow):
         self.new_region_button = QPushButton()
         self.delete_region_button = QPushButton()
         self.crop_region_button = QPushButton()
+        self.crop_all_region_button = QPushButton()
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
         page_view_buttons_layout.addWidget(self.crop_region_button)
+        page_view_buttons_layout.addWidget(self.crop_all_region_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
@@ -381,6 +385,7 @@ class Window(BaseWindow):
         self.new_region_button.clicked.connect(self.cb_create_save_region)
         self.delete_region_button.clicked.connect(self.cb_delete_cancel_region)
         self.crop_region_button.clicked.connect(self.cb_crop_uncrop_region)
+        self.crop_all_region_button.clicked.connect(self.cb_crop_uncrop_all_region)
 
     def cb_new_project(self):
         
@@ -641,6 +646,17 @@ class Window(BaseWindow):
         self.region_mode = not REGION_SELECT_MODE
         
         self.update_gui()
+
+    def cb_crop_uncrop_all_region(self):
+    
+        if self.region_mode == REGION_SELECT_MODE:
+            self._crop_all_region()
+        else:
+            self._uncrop_all_region()
+        
+        self.region_mode = not REGION_SELECT_MODE
+        
+        self.update_gui()
         
     def _crop_region(self):
         
@@ -651,6 +667,18 @@ class Window(BaseWindow):
     def _uncrop_region(self):
         
         self.current_page.uncrop_page()
+        
+    def _crop_all_region(self):
+        
+        region = self.graphics_view.get_selected_region()
+        for page in self.project.pages:
+            page.crop_page(region)
+        self.graphics_view.reset_rubberband()
+        
+    def _uncrop_all_region(self):
+        
+        for page in self.project.pages:
+            page.uncrop_page()
         
     def show_job_status(self):
         
@@ -717,7 +745,7 @@ class Window(BaseWindow):
                         self.rotate_180, self.rotate_270, self.previous_region_button,
                         self.next_region_button, self.region_algo_select,
                         self.new_region_button, self.delete_region_button,
-                        self.crop_region_button
+                        self.crop_region_button, self.crop_all_region_button
                         )
         self.set_enabled(True,
                         self.new_project_action, self.exit_action,
@@ -742,13 +770,15 @@ class Window(BaseWindow):
                 self.show_region_counter(0, 0)
             
         if self.region_mode == REGION_SELECT_MODE:
-            self.new_region_button.setText("Region übernehmen")
-            self.delete_region_button.setText("Abbrechen")
-            self.crop_region_button.setText("Freistellen")
+            self.new_region_button.setText(APPLY_REGION)
+            self.delete_region_button.setText(CANCEL_REGION)
+            self.crop_region_button.setText(CROP_REGION)
+            self.crop_all_region_button.setText(CROP_ALL_REGION)
         else:
-            self.new_region_button.setText("Region anlegen")
-            self.delete_region_button.setText("Region löschen")
-            self.crop_region_button.setText("Freistellung aufheben")
+            self.new_region_button.setText(CREATE_REGION)
+            self.delete_region_button.setText(DELETE_REGION)
+            self.crop_region_button.setText(UNCROP_REGION)
+            self.crop_all_region_button.setText(UNCROP_ALL_REGION)
             
     def set_widget_state_with_project(self):
         
@@ -778,7 +808,8 @@ class Window(BaseWindow):
 
                         )
         self.set_enabled(True,
-                        self.new_region_button, self.delete_region_button, self.crop_region_button
+                        self.new_region_button, self.delete_region_button, self.crop_region_button,
+                        self.crop_all_region_button
                         )
         
         
@@ -797,7 +828,8 @@ class Window(BaseWindow):
                         )
         self.set_enabled(False,
                         self.previous_page_button, self.next_page_button,
-                        self.crop_region_button, self.previous_region_button,
+                        self.crop_region_button, self.crop_all_region_button,
+                        self.previous_region_button,
                         self.next_region_button, self.region_algo_select,
                         self.delete_region_button
                         )
@@ -812,6 +844,7 @@ class Window(BaseWindow):
                                 self.next_region_button)
             if self.current_page.is_cropped():
                 self.set_enabled(True, self.crop_region_button)
+                self.set_enabled(True, self.crop_all_region_button)
             if len(self.project.pages) > 1:
                 self.set_enabled(True, self.next_page_button, self.previous_page_button)
 
