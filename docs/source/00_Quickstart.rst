@@ -78,6 +78,7 @@ achten, dass alle Scans gleich ausgerichtet sind.
 
 Schließt man nun den Dialog ab, werden einem die ganzen
 Seite auf dem Hauptbildschirm angezeigt. Im Prinzip kann
-man nun direkt die Seiten als pdf- oder tiff-Dateien 
+man nun direkt die Seiten exportieren. Normalerweise aber wird
+man erst die Seiten durchschauen und nachbearbeiten.
 
 
