@@ -20,10 +20,12 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
 
 import numpy as np
 from PIL.ImageOps import invert
+from operator import itemgetter
 
 Image.MAX_IMAGE_PIXELS = None
 
 RGB_WHITE = (255, 255, 255)
+RGB_BLACK = (0, 0, 0)
 GRAY_WHITE = 255
 BIN_WHITE = 1
 
@@ -49,6 +51,8 @@ class Algorithm(Enum):
     STENCIL_PRINT_BAD=12
     FOUR_COLORS=13
     INVERT=14
+    BLACK_AND_COLOR_ON_WHITE=15
+    THREE_COLORS_ON_WHITE=16
 
     
     def __str__(self):
@@ -66,7 +70,9 @@ class Algorithm(Enum):
             Algorithm.STENCIL_PRINT_GOOD: "Guter Matrizendruck",
             Algorithm.STENCIL_PRINT_BAD: "Schlechter Matrizendruck",
             Algorithm.FOUR_COLORS: "Vier Farben",
-            Algorithm.INVERT: "Invertieren"
+            Algorithm.INVERT: "Invertieren",
+            Algorithm.BLACK_AND_COLOR_ON_WHITE: "Schwarzer Text mit Farbe",
+            Algorithm.THREE_COLORS_ON_WHITE: "Drei Farben auf weiß"
         }
     
         return texts[self]
@@ -340,6 +346,17 @@ class FourColors(QuantizationAlgorithm):
             return (img, bg_color)
         return img, calculated_bg_color
 
+class ThreeColorsOnWhite(QuantizationAlgorithm):
+    
+    def transform(self, img:Image, bg_color):
+        
+        img, calculated_bg_color =  self._apply_quantization(img, 4)
+        if bg_color is not None:
+            img = self.replace_color_with_color(img, calculated_bg_color, bg_color)
+            return (img, bg_color)
+        img = self.replace_color_with_color(img, calculated_bg_color, RGB_WHITE)
+        return img, None
+
 class ColorTextOnWhite(QuantizationAlgorithm):
     """
     This is most useful if you have some color elements on an
@@ -360,6 +377,70 @@ class ColorTextOnWhite(QuantizationAlgorithm):
             np_img[bg_areas.T] = bg_color
         else:
             np_img[bg_areas.T] = RGB_WHITE
+
+        final_img = Image.fromarray(np_img)
+        final_img.info['dpi'] = img.info['dpi']
+        
+        return (final_img, None)
+
+class BlackAndColorTextOnWhite(QuantizationAlgorithm):
+    """
+    This is most useful if you have some color elements on an
+    otherwise black and white document (for example red headings
+    or a blue signature). Then you may apply regions in combination
+    with this algorithm to these color segments and retain the color.
+    """
+    
+    def transform(self, img:Image, project_bg_color):
+        
+        quantized_img, quantized_bg_color = self._apply_quantization(img, no_of_colors=3)
+
+        colors = quantized_img.getcolors()
+        assert(len(colors) == 3)
+        
+        sum0 = colors[0][1][0] + colors[0][1][1] + colors[0][1][2] 
+        sum1 = colors[1][1][0] + colors[1][1][1] + colors[1][1][2]
+        sum2 = colors[2][1][0] + colors[2][1][1] + colors[2][1][2]
+        
+        if sum0 < sum1 and sum1 < sum2:
+            white = colors[2][1]
+            black = colors[0][1]
+            color = colors[1][1]
+        elif sum0 < sum2 and sum2 < sum1:
+            white = colors[1][1]
+            black = colors[0][1]
+            color = colors[2][1]
+        elif sum1 < sum0 and sum0 < sum2:
+            white = colors[2][1]
+            black = colors[1][1]
+            color = colors[0][1]
+        elif sum1 < sum2 and sum2 < sum0:
+            white = colors[0][1]
+            black = colors[1][1]
+            color = colors[2][1]
+        elif sum2 < sum1 and sum1 < sum0:
+            white = colors[0][1]
+            black = colors[2][1]
+            color = colors[1][1]
+        elif sum2 < sum0 and sum0 < sum1:
+            white = colors[1][1]
+            black = colors[2][1]
+            color = colors[0][1]
+        
+        np_img = np.array(quantized_img)
+        red, green, blue = np_img.T
+
+        white_areas = (red == white[0]) & (green == white[1]) & (blue == white[2])
+        black_areas = (red == black[0]) & (green == black[1]) & (blue == black[2])
+        color_areas = (red == color[0]) & (green == color[1]) & (blue == color[2])
+        
+        np_img = np.array(img)
+        
+        if project_bg_color is not None:
+            np_img[white_areas.T] = project_bg_color
+        else:
+            np_img[white_areas.T] = RGB_WHITE
+        np_img[black_areas.T] = RGB_BLACK
 
         final_img = Image.fromarray(np_img)
         final_img.info['dpi'] = img.info['dpi']
@@ -465,9 +546,11 @@ class AlgorithmModule(Module):
                 Algorithm.SAUVOLA: Sauvola(),
                 Algorithm.TWO_COLOR_QUANTIZATION: TwoColors(),
                 Algorithm.FOUR_COLORS: FourColors(),
+                Algorithm.BLACK_AND_COLOR_ON_WHITE: BlackAndColorTextOnWhite(),
                 Algorithm.COLOR_PAPER_QUANTIZATION: BlackTextOnColor(),
                 Algorithm.COLOR_TEXT_QUANTIZATION: ColorTextOnWhite(),
                 Algorithm.STENCIL_PRINT_GOOD: GoodStencilPrint(),
                 Algorithm.STENCIL_PRINT_BAD: BadStencilPrint(),
                 Algorithm.ERASE: Erase(),
-                Algorithm.INVERT: InvertAlgorithm()}
+                Algorithm.INVERT: InvertAlgorithm(),
+                Algorithm.THREE_COLORS_ON_WHITE: ThreeColorsOnWhite()}
