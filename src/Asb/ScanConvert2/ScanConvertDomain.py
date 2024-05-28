@@ -327,6 +327,7 @@ class Page:
         if rotation_angle not in (0, 90, 180, 270):
             raise IllegalRotationAngle()
         self.rotation_angle = rotation_angle
+        self.alignment_angle = 0.0
         self.additional_rotation_angle = 0
         self.sub_regions = []
         self.skip_page = False
@@ -380,9 +381,17 @@ class Page:
             img = img.convert("RGB")
         if self.final_rotation_angle != 0:
             img = self._rotate_image(img, self.final_rotation_angle)
+        img = self.align_image(img)
         img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
         return img
-            
+    
+    def align_image(self, img):
+        
+        if self.alignment_angle == 0.0:
+            return img
+        
+        return img.rotate(self.alignment_angle, expand=False, fillcolor="white")
+
     def add_region(self, region: Region):
         
         self.sub_regions.append(region)

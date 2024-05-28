@@ -9,7 +9,7 @@ import sys
 import tempfile
 
 from PIL import Image
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
@@ -24,12 +24,12 @@ from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog, \
 from Asb.ScanConvert2.GUI.PageView import PageView
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
-from Asb.ScanConvert2.PictureDetector import PictureDetector
 from Asb.ScanConvert2.ScanConvertDomain import Project, \
-    Region, Page, NoPagesInProjectException, \
+    Page, NoPagesInProjectException, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
+from Asb.ScanConvert2.AngleCorrection import AngleCorrectionService
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
@@ -101,6 +101,14 @@ class BaseWindow(QMainWindow):
         self.exit_action.setShortcut('Ctrl+Q')
         self.exit_action.setStatusTip('Programm beenden')
 
+        self.align_page_action = QAction(QIcon('any.png'), '&Ausrichten', self)
+        self.align_page_action.setShortcut('Ctrl+A')
+        self.align_page_action.setStatusTip('Seite ausrichten')
+
+        self.align_all_pages_action = QAction(QIcon('any.png'), 'Alle Aus&richten', self)
+        self.align_all_pages_action.setShortcut('Ctrl+R')
+        self.align_all_pages_action.setStatusTip('Alle Seiten ausrichten')
+
         self.save_action = QAction(QIcon('save.png'), '&Speichern', self)
         self.save_action.setShortcut('Ctrl+S')
         self.save_action.setStatusTip('Project speichern')
@@ -135,6 +143,9 @@ class BaseWindow(QMainWindow):
         fileMenu.addAction(self.save_action)
         fileMenu.addAction(self.load_action)
         fileMenu.addAction(self.exit_action)
+        fileMenu = menubar.addMenu('&Seite')
+        fileMenu.addAction(self.align_page_action)
+        fileMenu.addAction(self.align_all_pages_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(self.pdf_export_action)
         exportMenu.addAction(self.tif_export_action)
@@ -320,6 +331,7 @@ class Window(BaseWindow):
     @inject
     def __init__(self,
                  project_service: ProjectService,
+                 angle_correction_service: AngleCorrectionService,
                  task_manager: TaskManager,
                  previewer: FehPreviewer):
 
@@ -328,6 +340,7 @@ class Window(BaseWindow):
         self.project = None
         self.region_mode = not REGION_SELECT_MODE
         self.project_service = project_service
+        self.angle_correction_service = angle_correction_service
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
         self.previewer = previewer
@@ -350,6 +363,8 @@ class Window(BaseWindow):
         self.exit_action.triggered.connect(QApplication.quit)
         self.save_action.triggered.connect(self.cb_save_project)
         self.load_action.triggered.connect(self.cb_load_project)
+        self.align_page_action.triggered.connect(self.cb_align_page)
+        self.align_all_pages_action.triggered.connect(self.cb_align_all_pages)
         self.pdf_export_action.triggered.connect(self.cb_export_pdf)
         self.ddf_export_action.triggered.connect(self.cb_export_ddf)
         self.tif_export_action.triggered.connect(self.cb_export_tif)
@@ -432,6 +447,24 @@ class Window(BaseWindow):
         
         self.project = project
         self.project.first_page()
+        
+    def cb_align_page(self):
+        
+        if self.project.current_page.alignment_angle != 0.0:
+            self.project.current_page.alignment_angle = 0.0
+        else:
+            img = self.project.current_page.get_raw_image()
+            angle = self.angle_correction_service.get_correct_angle(img)
+            self.project.current_page.alignment_angle = angle
+        self.update_gui()
+        
+    def cb_align_all_pages(self):
+        
+        for page in self.project.pages:
+            img = page.get_raw_image()
+            angle = self.angle_correction_service.get_correct_angle(img)
+            page.alignment_angle = angle
+        self.update_gui()
 
     def cb_export_pdf(self):
         
@@ -716,7 +749,8 @@ class Window(BaseWindow):
         if self.current_page.additional_rotation_angle != self._get_rotation():
             self._set_rotation(self.current_page.additional_rotation_angle)
         
-        self.graphics_view.set_page(self.current_page.get_raw_image())
+        img = self.current_page.get_raw_image()
+        self.graphics_view.set_page(img)
 
         for idx in range(0, self.main_algo_select.count()):
             if self.main_algo_select.itemText(idx) == "%s" % self.current_page.main_region.mode_algorithm:
@@ -736,7 +770,7 @@ class Window(BaseWindow):
     def set_widget_state_no_project(self):
         
         self.set_enabled(False,
-                        self.save_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.align_all_pages_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
@@ -758,7 +792,13 @@ class Window(BaseWindow):
         if self.project is None or len(self.project.pages) == 0:
             self.show_page_counter(0, 0)
             self.show_region_counter(0, 0)
+            self.align_page_action.setText("Seite &ausrichten")
         else:
+            if self.project.current_page.alignment_angle == 0.0:
+                self.align_page_action.setText("Seite &ausrichten")
+            else:
+                self.align_page_action.setText("&Ausrichten aufheben")
+
             try:
                 self.show_page_counter(self.project.current_page_no, len(self.project.pages))
             except NoPagesInProjectException:
@@ -795,7 +835,7 @@ class Window(BaseWindow):
     def set_widget_state_region_select(self):
         
         self.set_enabled(False,
-                        self.save_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.align_all_pages_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
@@ -827,6 +867,7 @@ class Window(BaseWindow):
                         self.new_region_button,
                         )
         self.set_enabled(False,
+                         self.align_page_action, self.align_all_pages_action,
                         self.previous_page_button, self.next_page_button,
                         self.crop_region_button, self.crop_all_region_button,
                         self.previous_region_button,
@@ -834,6 +875,8 @@ class Window(BaseWindow):
                         self.delete_region_button
                         )
         if len(self.project.pages) > 0:
+            self.set_enabled(True, self.align_page_action)
+            self.set_enabled(True, self.align_all_pages_action)
             if len(self.current_page.sub_regions) > 0:
                 self.set_enabled(True,
                                 self.region_algo_select,
