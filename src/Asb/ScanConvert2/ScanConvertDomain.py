@@ -12,7 +12,6 @@ import os
 import re
 from Asb.ScanConvert2.CroppingService import CroppingInformation
 
-
 class Mode(Enum):
     
     BW=1
@@ -24,7 +23,27 @@ class ScanPart(Enum):
     WHOLE = 1
     LEFT = 2
     RIGHT = 3
+
+class PdfMode(Enum):
     
+    MANUAL=1
+    MANUAL_WITH_ORIGINAL=2
+    ORIGINAL=3
+    OTSU=4
+    SAUVOLA=5
+    
+    def __str__(self):
+
+        texts = {
+            PdfMode.MANUAL: "Nachbearbeiteter Scan",
+            PdfMode.MANUAL_WITH_ORIGINAL: "Nachbearbeiteter Scan mit Originalansicht",
+            PdfMode.ORIGINAL: "Originaler Scan",
+            PdfMode.OTSU: "Schwellwert Binarisierung",
+            PdfMode.SAUVOLA: "Adaptive Schwellwert Binarisierung"
+        }
+    
+        return texts[self]
+        
 class MissingResolutionInfo(Exception):
     
     pass
@@ -181,6 +200,7 @@ class ProjectProperties(object):
         self.scan_rotation = scan_rotation
         self.rotation_alternating = rotation_alternating
         self.pdf_resolution = 300
+        self.pdf_mode = PdfMode.SAUVOLA
         self.tif_resolution = 300
         self.run_ocr = True
         self.create_pdfa = True

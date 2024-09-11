@@ -8,7 +8,8 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
     QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox
 import pytesseract
 
-from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties
+from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties,\
+    PdfMode
 
 
 class MetadataDialog(QDialog):
@@ -216,6 +217,15 @@ class PropertiesDialog(QDialog):
         input_column = QVBoxLayout()
         line_inputs.addLayout(input_column)
         
+        label = QLabel("Pdf-Generierung:")
+        label_column.addWidget(label)
+        self.pdf_mode_select = QComboBox()
+        modes = []
+        for mode in PdfMode:
+            modes.append("%s" % mode)
+        self.pdf_mode_select.addItems(modes)
+        input_column.addWidget(self.pdf_mode_select)
+
         label = QLabel("Auflösung pdf:")
         label_column.addWidget(label)
         self.pdf_resolution_input = QLineEdit(self)
@@ -269,6 +279,10 @@ class PropertiesDialog(QDialog):
         self.properties.ocr_lang = self.ocr_lang_select.currentText()
         self.properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
         self.properties.normalize_background_colors = self.color_normalization_checkbox.isChecked()
+        for pdf_mode in PdfMode:
+            if "%s" % pdf_mode == self.pdf_mode_select.currentText():
+                self.properties.pdf_mode = pdf_mode
+                break
         return self.properties
         
     def _set_properties(self, properties: ProjectProperties):
@@ -281,6 +295,10 @@ class PropertiesDialog(QDialog):
         for idx in range(0, len(self.available_languages)):
             if self.ocr_lang_select.itemText(idx) == "%s" % properties.ocr_lang:
                 self.ocr_lang_select.setCurrentIndex(idx)
+                break
+        for idx in range(0, len(PdfMode)):
+            if self.pdf_mode_select.itemText(idx) == "%s" % properties.pdf_mode:
+                self.pdf_mode_select.setCurrentIndex(idx)
                 break
         self.create_pdfa_checkbox.setChecked(properties.create_pdfa)
         self.color_normalization_checkbox.setChecked(properties.normalize_background_colors)

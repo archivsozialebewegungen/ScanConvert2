@@ -9,6 +9,10 @@ from PIL import Image
 import pytesseract
 from xml.dom.minidom import parseString, Element, Node
 
+OCR_PICTURE_MODE_MANUAL = 1
+OCR_PICTURE_MODE_OTSU = 2
+OCR_PICTURE_MODE_RAW = 3
+
 class OCRPage(object):
     
     def __init__(self, dpi=300):
@@ -78,6 +82,7 @@ class OcrRunner(object):
         '''
 
         hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang=lang)
+        
         dom = parseString(hocr)
         page = OCRPage(img.info['dpi'][0])
         page.width = img.size[0]

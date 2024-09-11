@@ -20,10 +20,11 @@ from reportlab.pdfgen.canvas import Canvas
 
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper
-from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
+from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord,\
+    OCR_PICTURE_MODE_RAW, OCR_PICTURE_MODE_MANUAL, OCR_PICTURE_MODE_OTSU
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
-    DDFFileType, ScanPart
+    DDFFileType, ScanPart, PdfMode
 from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
@@ -421,18 +422,32 @@ class FinishingService(object):
         final_img = self._apply_regions(page.sub_regions, bg_img, img, bg_color, target_source_ratio)
         return final_img, bg_colors
 
-    def create_pdf_image(self, page: Page, target_resolution: int) -> Image:
+    def create_pdf_image(self, page: Page, bg_colors, project_properties) -> Image:
+        
+        if project_properties.pdf_mode in (PdfMode.MANUAL, PdfMode.MANUAL_WITH_ORIGINAL):
+            img, bg_colors = self.create_final_image(page, bg_colors=bg_colors, target_resolution=project_properties.pdf_resolution)
+            return img
         
         img = page.get_raw_image()
 
         target_source_ratio = 1.0        
-        if page.source_resolution != target_resolution:
-            target_source_ratio = target_resolution / page.source_resolution
+        if page.source_resolution != project_properties.pdf_resolution:
+            target_source_ratio = project_properties.pdf_resolution / page.source_resolution
             img = self.change_resolution(img, target_source_ratio)
+            
+        if project_properties.pdf_mode == PdfMode.ORIGINAL:
+            return img
         
-        bg_img = img.convert("RGB")
-        bg_img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(bg_img, None)
-        return bg_img
+        # OCR_PICTURE_MODE_OTSU
+        img = img.convert("RGB")
+        if project_properties.pdf_mode == PdfMode.OTSU:
+            img, bg_color = self.algorithm_implementations[Algorithm.OTSU].transform(img, None)
+        elif project_properties.pdf_mode == PdfMode.SAUVOLA:
+            img, bg_color = self.algorithm_implementations[Algorithm.SAUVOLA].transform(img, None)
+        else:
+            raise Exception("Unsupported PdfMode %s" % project_properties.pdf_mode)
+
+        return img
 
     def _substitute_bg_color(self, bg_img, bg_color, bg_colors):
         
@@ -506,7 +521,7 @@ class PdfService:
         self.finishing_service = finishing_service
         self.algorithm_helper = algorithm_helper
     
-    def create_pdf_file(self, project: Project, filebase: str, stupid_ddf_pdf: bool=False):
+    def create_pdf_file(self, project: Project, filebase: str):
    
         bg_colors = []
    
@@ -526,7 +541,7 @@ class PdfService:
                 if page.skip_page:
                     continue
 
-                if stupid_ddf_pdf: 
+                if project.project_properties.pdf_mode == PdfMode.MANUAL_WITH_ORIGINAL: 
                     image = page.get_raw_image()
                 else:
                     image, new_bg_colors = self.finishing_service.create_final_image(page, bg_colors, project.project_properties.pdf_resolution)
@@ -549,7 +564,9 @@ class PdfService:
                 img_reader = ImageReader(img_stream)
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
                 if project.project_properties.run_ocr:
-                    pdf = self.ocr_service.add_ocrresult_to_pdf(self.finishing_service.create_pdf_image(page, project.project_properties.pdf_resolution), pdf, project.project_properties.ocr_lang)
+                    ocr_image = self.finishing_service.create_pdf_image(page, bg_colors, project.project_properties)
+                    #ocr_image.show()
+                    pdf = self.ocr_service.add_ocrresult_to_pdf(ocr_image, pdf, project.project_properties.ocr_lang)
                 pdf.showPage()
         
             pdf.save()
