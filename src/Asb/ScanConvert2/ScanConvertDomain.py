@@ -439,8 +439,13 @@ class Page:
         
         if final_rotation_angle == 90:
 
-            return Region(region.y,
-                          self.main_region.height - region.width - region.x,
+        #    return Region(region.y,
+        #                  self.main_region.height - region.width - region.x,
+        #                  region.height,
+        #                  region.width)
+
+            return Region(self.main_region.x + region.y,
+                          self.main_region.y + self.main_region.height - region.width - region.x,
                           region.height,
                           region.width)
 

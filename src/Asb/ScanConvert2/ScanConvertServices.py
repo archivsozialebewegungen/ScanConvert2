@@ -538,6 +538,7 @@ class PdfService:
             
             for page in project.pages:
                 page_counter += 1
+                print("Processing page %d/%d." % (page_counter, len(project.pages)))
                 if page.skip_page:
                     continue
 
@@ -565,7 +566,6 @@ class PdfService:
                 pdf.drawImage(img_reader, 0, 0, width=page_width, height=page_height)
                 if project.project_properties.run_ocr:
                     ocr_image = self.finishing_service.create_pdf_image(page, bg_colors, project.project_properties)
-                    #ocr_image.show()
                     pdf = self.ocr_service.add_ocrresult_to_pdf(ocr_image, pdf, project.project_properties.ocr_lang)
                 pdf.showPage()
         
