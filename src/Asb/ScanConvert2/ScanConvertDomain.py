@@ -610,5 +610,6 @@ class Project(object):
     
     current_page = property(_get_current_page)
     no_of_pages = property(_get_number_of_pages)
+    proposed_png_file = property(lambda self: self._get_proposed_file("png"))
     proposed_pdf_file = property(lambda self: self._get_proposed_file("pdf"))
     proposed_zip_file = property(lambda self: self._get_proposed_file("zip"))

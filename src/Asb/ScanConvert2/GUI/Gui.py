@@ -55,11 +55,16 @@ class FehPreviewer(object):
         
     def show(self, page: Page, resolution: int):
         
-        img, bg_color = self.finishing_service.create_final_image(page, [], resolution)
+        img, _ = self.finishing_service.create_final_image(page, [], resolution)
         tmp_file = tempfile.NamedTemporaryFile(mode="wb", suffix=".png")
         img.save(tmp_file, format="png")
         os.system("%s %s" % (self.feh, tmp_file.name))
         tmp_file.close()
+
+    def export(self, page: Page, resolution: int, file_name: str):
+        
+        img, _ = self.finishing_service.create_final_image(page, [], resolution)
+        img.save(file_name, format="png")
 
     def is_working(self):
         
@@ -171,6 +176,9 @@ class BaseWindow(QMainWindow):
 
         self.preview_button = QPushButton("Vorschau")
         left_panel.addWidget(self.preview_button)
+
+        self.preview_export_button = QPushButton("Vorschau exportieren")
+        left_panel.addWidget(self.preview_export_button)
             
         label = QLabel("<b>Regioneneinstellungen</b>")
         left_panel.addWidget(label)
@@ -374,6 +382,7 @@ class Window(BaseWindow):
         # Left panel main
         self.skip_page_checkbox.clicked.connect(self.cb_toggle_skip_page)
         self.preview_button.clicked.connect(self.cb_preview_current_page)
+        self.preview_export_button.clicked.connect(self.cb_preview_export_current_page)
             
         # Left panel, page scroller
         self.previous_page_button.clicked.connect(self.cb_set_previous_as_current_page)
@@ -547,6 +556,19 @@ class Window(BaseWindow):
         
         try:
             self.previewer.show(self.project.current_page, self.project.project_properties.pdf_resolution)
+        except NoPagesInProjectException:
+            pass
+
+    def cb_preview_export_current_page(self):
+        
+        try:
+            file_name = QFileDialog.getSaveFileName(parent=self,
+                                                dir=self.project.proposed_png_file,
+                                                caption="png-Datei für das Speichern angeben",
+                                                filter="png-Dateien (*.png)")
+            if not file_name[0]:
+                return
+            self.previewer.export(self.project.current_page, self.project.project_properties.pdf_resolution, file_name[0])
         except NoPagesInProjectException:
             pass
         
