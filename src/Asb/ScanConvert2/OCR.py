@@ -7,7 +7,7 @@ from injector import singleton
 import re
 from PIL import Image
 import pytesseract
-from xml.dom.minidom import parseString, Element, Node
+import xml.etree.ElementTree as ET
 
 OCR_PICTURE_MODE_MANUAL = 1
 OCR_PICTURE_MODE_OTSU = 2
@@ -80,30 +80,33 @@ class OcrRunner(object):
         This is one of two public methods. It executes OCR on the given image and
         returns the information in a page object.
         '''
-
+        print("create hocr")
         hocr = pytesseract.image_to_pdf_or_hocr(img, extension='hocr', lang=lang)
         
-        dom = parseString(hocr)
+        print("read hocr")
+        dom = ET.fromstring(hocr)
+        print("prepare page")
         page = OCRPage(img.info['dpi'][0])
         page.width = img.size[0]
         page.height = img.size[1]
+        print("parsing dom")
         return self._parse_dom(dom, page)
 
-    def run_tesseract_for_alto(self, img: Image, lang: str) -> OCRPage:
+    def run_tesseract_for_alto(self, img: Image, lang: str) -> ET.Element:
         '''
         Executes tesseract and returns the result als alto dom.
         '''
 
         alto = pytesseract.image_to_alto_xml(img, lang=lang)
-        return parseString(alto)
+        return ET.fromstring(alto)
     
-    def _parse_dom(self, dom: Element, page: OCRPage):
+    def _parse_dom(self, root: ET.Element, page: OCRPage):
 
-        for paragraph in dom.getElementsByTagName("p"):
+        for paragraph in root.findall("p"):
             page = self._add_lines_to_page(paragraph, page)
         return page
     
-    def _add_lines_to_page(self, paragraph: Element, page_data: OCRPage) -> OCRPage:
+    def _add_lines_to_page(self, paragraph: ET.Element, page_data: OCRPage) -> OCRPage:
         
         for line in self._get_lines(paragraph):
             line_data = OCRLine()
@@ -117,7 +120,7 @@ class OcrRunner(object):
 
         return page_data
     
-    def _add_words_to_line(self, line: Element, line_data: OCRLine, page_data: OCRPage) -> OCRLine:
+    def _add_words_to_line(self, line: ET.Element, line_data: OCRLine, page_data: OCRPage) -> OCRLine:
 
         for word in self._get_words(line):
             word_data = OCRWord()
@@ -127,54 +130,48 @@ class OcrRunner(object):
         
         return line_data
 
-    def _get_lines(self, paragraph: Element):
+    def _get_lines(self, paragraph: ET.Element):
         
         lines = []
-        for child in paragraph.childNodes:
-            if child.nodeType == Node.ELEMENT_NODE \
-                    and child.tagName == "span" \
-                    and child.getAttribute("class") == "ocr_line":
+        for child in paragraph.findall("./span[@class='ocr_line'"):
                 lines.append(child)
         return lines
 
-    def _get_words(self, page: Element):
+    def _get_words(self, line: ET.Element):
         
         words = []
-        for child in page.childNodes:
-            if child.nodeType == Node.ELEMENT_NODE \
-                    and child.tagName == "span" \
-                    and child.getAttribute("class") == "ocrx_word":
+        for child in line.findall("./span[@class='ocrx_word']"):
                 words.append(child)
         return words
     
-    def _get_bounding_box(self, element: Element, page_data: OCRPage):
+    def _get_bounding_box(self, element: ET.Element, page_data: OCRPage):
         '''
         We recalculate the bounding box to match the differing coordinate
         system of reportlab
         '''
-        matcher = re.match(self.re_boundingbox, element.getAttribute("title"))
+        matcher = re.match(self.re_boundingbox, element.get("title"))
         if matcher:
             return (float(matcher.group(1)), page_data.height - float(matcher.group(2)),
                     float(matcher.group(3)), page_data.height - float(matcher.group(4)))
         raise Exception("Malformed hocr")
     
-    def _get_baseline_coefficients(self, element: Element):
+    def _get_baseline_coefficients(self, element: ET.Element):
         
-        matcher = re.match(self.re_baseline, element.getAttribute("title"))
+        matcher = re.match(self.re_baseline, element.get("title"))
         if matcher:
             return (float(matcher.group(1)), float(matcher.group(2)))
         return (1.0, 0.0)
 
-    def _get_textangle(self, element: Element):
+    def _get_textangle(self, element: ET.Element):
         
-        matcher = re.match(self.re_textangle, element.getAttribute("title"))
+        matcher = re.match(self.re_textangle, element.get("title"))
         if matcher:
             return int(matcher.group(1))
         return 0
 
-    def _get_x_size(self, element: Element):
+    def _get_x_size(self, element: ET.Element):
         
-        matcher = re.match(self.re_x_size, element.getAttribute("title"))
+        matcher = re.match(self.re_x_size, element.get("title"))
         if matcher:
             return (float(matcher.group(1)))
         raise Exception("Malformed hocr")

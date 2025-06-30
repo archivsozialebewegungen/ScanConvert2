@@ -28,6 +28,7 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
 from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
+# TODO: Replace minidom with ElementTree
 from xml.dom.minidom import parseString, Document
 import re
 
@@ -313,7 +314,7 @@ class OCRService(object):
         
         for line in page.lines:
             pdf = self._write_line(line, pdf, page)
-
+        
         return pdf
     
     def _write_line(self, line: OCRLine, pdf: Canvas, page: OCRPage) -> Canvas:
@@ -524,7 +525,7 @@ class PdfService:
     def create_pdf_file(self, project: Project, filebase: str):
    
         bg_colors = []
-   
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_file = os.path.join(temp_dir, "output.pdf")
             pdf = Canvas(temp_file, pageCompression=1)
@@ -555,7 +556,6 @@ class PdfService:
             
                 pdf.setPageSize((width_in_dots * inch / project.project_properties.pdf_resolution,
                                  height_in_dots * inch / project.project_properties.pdf_resolution))
-
                 img_stream = io.BytesIO()
                 # if image.mode == "1":
                 image.save(img_stream, format='png')
@@ -882,9 +882,7 @@ class DDFService(ExportService, XMLGenerator):
     def _write_alto_file(self, img, file_name, ocr_lang):
         
         alto_dom = self.ocr_runner.run_tesseract_for_alto(img, ocr_lang)
-        file = open(file_name, "w")
-        file.write(alto_dom.toprettyxml())
-        file.close()
+        alto_dom.write(file_name)
 
     def _join_alto_files(self, projectfiles, file_name):
         
