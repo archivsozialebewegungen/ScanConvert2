@@ -20,7 +20,7 @@ from injector import inject, Injector, singleton
 
 from Asb.ScanConvert2.Algorithms import Algorithm, AlgorithmModule
 from Asb.ScanConvert2.GUI.Dialogs import MetadataDialog, PropertiesDialog, \
-    DDFMetadataDialog
+    DDFMetadataDialog, RotationDialog
 from Asb.ScanConvert2.GUI.PageView import PageView
 from Asb.ScanConvert2.GUI.ProjectWizard import ProjectWizard
 from Asb.ScanConvert2.GUI.TaskRunner import TaskManager, JobDefinition
@@ -110,6 +110,10 @@ class BaseWindow(QMainWindow):
         self.align_page_action.setShortcut('Ctrl+A')
         self.align_page_action.setStatusTip('Seite ausrichten')
 
+        self.manual_align_page_action = QAction(QIcon('any.png'), '&Manuell ausrichten', self)
+        self.manual_align_page_action.setShortcut('Ctrl+M')
+        self.manual_align_page_action.setStatusTip('Seite manuell ausrichten')
+
         self.align_all_pages_action = QAction(QIcon('any.png'), 'Alle Aus&richten', self)
         self.align_all_pages_action.setShortcut('Ctrl+R')
         self.align_all_pages_action.setStatusTip('Alle Seiten ausrichten')
@@ -150,6 +154,7 @@ class BaseWindow(QMainWindow):
         fileMenu.addAction(self.exit_action)
         fileMenu = menubar.addMenu('&Seite')
         fileMenu.addAction(self.align_page_action)
+        fileMenu.addAction(self.manual_align_page_action)
         fileMenu.addAction(self.align_all_pages_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(self.pdf_export_action)
@@ -355,6 +360,7 @@ class Window(BaseWindow):
         self.metadata_dialog = MetadataDialog(self)
         self.ddf_metadata_dialog = DDFMetadataDialog(self)
         self.properties_dialog = PropertiesDialog(self)
+        self.rotation_dialog = RotationDialog(self)
         
         self.setGeometry(50, 50, 1000, 600)
         self.setWindowTitle("Scan-Kovertierer")
@@ -372,6 +378,7 @@ class Window(BaseWindow):
         self.save_action.triggered.connect(self.cb_save_project)
         self.load_action.triggered.connect(self.cb_load_project)
         self.align_page_action.triggered.connect(self.cb_align_page)
+        self.manual_align_page_action.triggered.connect(self.cb_manual_align_page)
         self.align_all_pages_action.triggered.connect(self.cb_align_all_pages)
         self.pdf_export_action.triggered.connect(self.cb_export_pdf)
         self.ddf_export_action.triggered.connect(self.cb_export_ddf)
@@ -530,6 +537,15 @@ class Window(BaseWindow):
         self.metadata_dialog.metadata = self.project.metadata
         if self.metadata_dialog.exec():
             self.project.metadata = self.metadata_dialog.metadata
+            
+    def cb_manual_align_page(self):
+        
+        self.rotation_dialog.main_window = self
+        if self.rotation_dialog.exec():
+            pass
+        else:
+            self.project.current_page.alignment_angle = self.rotation_dialog.original_alignment_angle
+            self.update_gui()
 
     def cb_edit_ddf_metadata(self):
         
@@ -792,7 +808,7 @@ class Window(BaseWindow):
     def set_widget_state_no_project(self):
         
         self.set_enabled(False,
-                        self.save_action, self.align_page_action, self.align_all_pages_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.manual_align_page_action, self.align_all_pages_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
@@ -889,7 +905,7 @@ class Window(BaseWindow):
                         self.new_region_button,
                         )
         self.set_enabled(False,
-                         self.align_page_action, self.align_all_pages_action,
+                         self.align_page_action, self.manual_align_page_action, self.align_all_pages_action,
                         self.previous_page_button, self.next_page_button,
                         self.crop_region_button, self.crop_all_region_button,
                         self.previous_region_button,
@@ -898,6 +914,7 @@ class Window(BaseWindow):
                         )
         if len(self.project.pages) > 0:
             self.set_enabled(True, self.align_page_action)
+            self.set_enabled(True, self.manual_align_page_action)
             self.set_enabled(True, self.align_all_pages_action)
             if len(self.current_page.sub_regions) > 0:
                 self.set_enabled(True,

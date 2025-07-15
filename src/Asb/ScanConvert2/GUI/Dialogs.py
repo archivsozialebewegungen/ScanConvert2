@@ -5,11 +5,12 @@ Created on 09.01.2023
 '''
 from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
-    QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox
+    QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox,\
+    QDoubleSpinBox
 import pytesseract
 
 from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties,\
-    PdfMode
+    PdfMode, Page
 
 
 class MetadataDialog(QDialog):
@@ -262,6 +263,7 @@ class PropertiesDialog(QDialog):
         self.setLayout(layout)
 
         self.properties = None
+        
     def _get_properties(self):
         
         if self.properties is None:
@@ -304,3 +306,45 @@ class PropertiesDialog(QDialog):
         self.color_normalization_checkbox.setChecked(properties.normalize_background_colors)
 
     project_properties = property(_get_properties, _set_properties)
+    
+class RotationDialog(QDialog):
+    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Seitenausrichtung")
+        self.setGeometry(40, 40, 100, 100)
+        
+        self.main_window = parent
+        self.original_alignment_angle = 0
+        
+        
+        layout = QVBoxLayout()
+        label = QLabel('<font size="+2"><b>Ausrichtung der Seite</b></font>')
+        layout.addWidget(label)
+        
+        selection_line = QHBoxLayout()
+        label = QLabel('Winkel:')
+        selection_line.addWidget(label)
+        spin_box = QDoubleSpinBox()
+        spin_box.setDecimals(2)
+        spin_box.setMaximum(90)
+        spin_box.setMinimum(-90)
+        spin_box.setSingleStep(0.1)
+        spin_box.valueChanged.connect(self.cb_rotation_angle_changed)
+        selection_line.addWidget(spin_box)
+        
+        layout.addLayout(selection_line)
+
+        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        buttonBox = QDialogButtonBox(QBtn)
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+        layout.addWidget(buttonBox)
+        
+        self.setLayout(layout)
+
+    def cb_rotation_angle_changed(self, value):
+                
+        self.main_window.project.current_page.alignment_angle = value
+        self.main_window.update_gui()
+
