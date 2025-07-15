@@ -206,6 +206,7 @@ class ProjectProperties(object):
         self.create_pdfa = True
         self.ocr_lang = "deu"
         self.normalize_background_colors = True
+        self.deskew_library = False
 
 class Region(object):
     '''

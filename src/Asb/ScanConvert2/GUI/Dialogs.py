@@ -258,6 +258,11 @@ class PropertiesDialog(QDialog):
         self.color_normalization_checkbox = QCheckBox(self)
         input_column.addWidget(self.color_normalization_checkbox)
 
+        label = QLabel("Deskew Bibliothek verwenden:")
+        label_column.addWidget(label)
+        self.deskew_library_checkbox = QCheckBox(self)
+        input_column.addWidget(self.deskew_library_checkbox)
+
         layout.addWidget(buttonBox)
         
         self.setLayout(layout)
@@ -281,6 +286,7 @@ class PropertiesDialog(QDialog):
         self.properties.ocr_lang = self.ocr_lang_select.currentText()
         self.properties.create_pdfa = self.create_pdfa_checkbox.isChecked()
         self.properties.normalize_background_colors = self.color_normalization_checkbox.isChecked()
+        self.properties.deskew_library = self.deskew_library_checkbox.isChecked()
         for pdf_mode in PdfMode:
             if "%s" % pdf_mode == self.pdf_mode_select.currentText():
                 self.properties.pdf_mode = pdf_mode
@@ -304,6 +310,11 @@ class PropertiesDialog(QDialog):
                 break
         self.create_pdfa_checkbox.setChecked(properties.create_pdfa)
         self.color_normalization_checkbox.setChecked(properties.normalize_background_colors)
+        try:
+            self.deskew_library_checkbox.setChecked(properties.deskew_library)
+        except AttributeError:
+            properties.deskew_library = False
+            self.deskew_library_checkbox.setChecked(False)
 
     project_properties = property(_get_properties, _set_properties)
     
@@ -325,13 +336,13 @@ class RotationDialog(QDialog):
         selection_line = QHBoxLayout()
         label = QLabel('Winkel:')
         selection_line.addWidget(label)
-        spin_box = QDoubleSpinBox()
-        spin_box.setDecimals(2)
-        spin_box.setMaximum(90)
-        spin_box.setMinimum(-90)
-        spin_box.setSingleStep(0.1)
-        spin_box.valueChanged.connect(self.cb_rotation_angle_changed)
-        selection_line.addWidget(spin_box)
+        self.spin_box = QDoubleSpinBox()
+        self.spin_box.setDecimals(2)
+        self.spin_box.setMaximum(90)
+        self.spin_box.setMinimum(-90)
+        self.spin_box.setSingleStep(0.1)
+        self.spin_box.valueChanged.connect(self.cb_rotation_angle_changed)
+        selection_line.addWidget(self.spin_box)
         
         layout.addLayout(selection_line)
 

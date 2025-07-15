@@ -8,6 +8,8 @@ import cv2
 from injector import singleton, inject
 from PIL import Image
 from skimage.filters.thresholding import threshold_otsu
+from skimage.color import rgb2gray
+from deskew import determine_skew
 
 BINARY_BLACK = False
 BINARY_WHITE = True
@@ -49,6 +51,15 @@ class SmearingService(object):
                 col_idx += 1
                 
         return smeared_img
+
+@singleton
+class DeskewService(object):
+    
+    def get_correct_angle(self, img):
+        
+        grayscale = rgb2gray(img)
+        angle = determine_skew(grayscale) 
+        return angle
 
 @singleton
 class AngleCorrectionService(object):

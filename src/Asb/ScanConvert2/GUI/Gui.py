@@ -29,7 +29,7 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
     FinishingService
-from Asb.ScanConvert2.AngleCorrection import AngleCorrectionService
+from Asb.ScanConvert2.AngleCorrection import AngleCorrectionService, DeskewService
 
 CREATE_REGION = "Region anlegen"
 APPLY_REGION = "Auswahl übernehmen"
@@ -345,6 +345,7 @@ class Window(BaseWindow):
     def __init__(self,
                  project_service: ProjectService,
                  angle_correction_service: AngleCorrectionService,
+                 deskew_service: DeskewService,
                  task_manager: TaskManager,
                  previewer: FehPreviewer):
 
@@ -354,6 +355,7 @@ class Window(BaseWindow):
         self.region_mode = not REGION_SELECT_MODE
         self.project_service = project_service
         self.angle_correction_service = angle_correction_service
+        self.deskew_service = deskew_service
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
         self.previewer = previewer
@@ -470,7 +472,15 @@ class Window(BaseWindow):
             self.project.current_page.alignment_angle = 0.0
         else:
             img = self.project.current_page.get_raw_image()
-            angle = self.angle_correction_service.get_correct_angle(img)
+            try:
+                if self.project.project_properties.deskew_library:
+                    pass
+            except AttributeError:
+                self.project.project_properties.deskew_library = False
+            if self.project.project_properties.deskew_library:
+                angle = self.deskew_service.get_correct_angle(img)
+            else:
+                angle = self.angle_correction_service.get_correct_angle(img)
             self.project.current_page.alignment_angle = angle
         self.update_gui()
         
@@ -540,7 +550,7 @@ class Window(BaseWindow):
             
     def cb_manual_align_page(self):
         
-        self.rotation_dialog.main_window = self
+        self.rotation_dialog.spin_box.setValue(self.project.current_page.alignment_angle)
         if self.rotation_dialog.exec():
             pass
         else:
@@ -873,7 +883,8 @@ class Window(BaseWindow):
     def set_widget_state_region_select(self):
         
         self.set_enabled(False,
-                        self.save_action, self.align_page_action, self.align_all_pages_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.manual_align_page_action,
+                        self.align_all_pages_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
