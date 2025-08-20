@@ -118,6 +118,14 @@ class BaseWindow(QMainWindow):
         self.align_all_pages_action.setShortcut('Ctrl+R')
         self.align_all_pages_action.setStatusTip('Alle Seiten ausrichten')
 
+        self.dewarp_page_action = QAction(QIcon('any.png'), 'Text &Glätten', self)
+        self.dewarp_page_action.setShortcut('Ctrl+G')
+        self.dewarp_page_action.setStatusTip('Text glätten')
+
+        self.reread_page_action = QAction(QIcon('any.png'), 'Datei neu einlesen', self)
+        self.reread_page_action.setShortcut('Ctrl+D')
+        self.reread_page_action.setStatusTip('Datei neu einlesen')
+
         self.save_action = QAction(QIcon('save.png'), '&Speichern', self)
         self.save_action.setShortcut('Ctrl+S')
         self.save_action.setStatusTip('Project speichern')
@@ -156,6 +164,8 @@ class BaseWindow(QMainWindow):
         fileMenu.addAction(self.align_page_action)
         fileMenu.addAction(self.manual_align_page_action)
         fileMenu.addAction(self.align_all_pages_action)
+        fileMenu.addAction(self.dewarp_page_action)
+        fileMenu.addAction(self.reread_page_action)
         exportMenu = menubar.addMenu("&Export")
         exportMenu.addAction(self.pdf_export_action)
         exportMenu.addAction(self.tif_export_action)
@@ -382,6 +392,8 @@ class Window(BaseWindow):
         self.align_page_action.triggered.connect(self.cb_align_page)
         self.manual_align_page_action.triggered.connect(self.cb_manual_align_page)
         self.align_all_pages_action.triggered.connect(self.cb_align_all_pages)
+        self.dewarp_page_action.triggered.connect(self.cb_dewarp_page)
+        self.reread_page_action.triggered.connect(self.cb_reread_scan_for_current_page)
         self.pdf_export_action.triggered.connect(self.cb_export_pdf)
         self.ddf_export_action.triggered.connect(self.cb_export_ddf)
         self.tif_export_action.triggered.connect(self.cb_export_tif)
@@ -484,6 +496,10 @@ class Window(BaseWindow):
             self.project.current_page.alignment_angle = angle
         self.update_gui()
         
+    def cb_dewarp_page(self):
+        
+        pass
+        
     def cb_align_all_pages(self):
         
         for page in self.project.pages:
@@ -491,7 +507,16 @@ class Window(BaseWindow):
             angle = self.angle_correction_service.get_correct_angle(img)
             page.alignment_angle = angle
         self.update_gui()
-
+        
+    def cb_reread_scan_for_current_page(self):
+        
+        try:
+            self.project_service.reread_scan(self.project, self.current_page.scan)
+        except NoPagesInProjectException:
+            return
+        
+        self.update_gui()
+                
     def cb_export_pdf(self):
         
         if not self.project.metadata.reviewed:
@@ -615,7 +640,7 @@ class Window(BaseWindow):
             return
         
         self.update_gui()
-                
+
     def cb_main_algo_changed(self):
         
         try:
@@ -818,7 +843,8 @@ class Window(BaseWindow):
     def set_widget_state_no_project(self):
         
         self.set_enabled(False,
-                        self.save_action, self.align_page_action, self.manual_align_page_action, self.align_all_pages_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.manual_align_page_action,
+                        self.dewarp_page_action, self.align_all_pages_action, self.reread_page_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
@@ -883,8 +909,8 @@ class Window(BaseWindow):
     def set_widget_state_region_select(self):
         
         self.set_enabled(False,
-                        self.save_action, self.align_page_action, self.manual_align_page_action,
-                        self.align_all_pages_action, self.pdf_export_action,
+                        self.save_action, self.align_page_action, self.manual_align_page_action, self.reread_page_action,
+                        self.align_all_pages_action, self.dewarp_page_action, self.pdf_export_action,
                         self.ddf_export_action, self.tif_export_action,
                         self.edit_metadata_action, self.edit_properties_action,
                         self.skip_page_checkbox, self.preview_button,
@@ -917,16 +943,19 @@ class Window(BaseWindow):
                         )
         self.set_enabled(False,
                          self.align_page_action, self.manual_align_page_action, self.align_all_pages_action,
-                        self.previous_page_button, self.next_page_button,
-                        self.crop_region_button, self.crop_all_region_button,
-                        self.previous_region_button,
-                        self.next_region_button, self.region_algo_select,
-                        self.delete_region_button
+                         self.dewarp_page_action, self.reread_page_action,
+                         self.previous_page_button, self.next_page_button,
+                         self.crop_region_button, self.crop_all_region_button,
+                         self.previous_region_button,
+                         self.next_region_button, self.region_algo_select,
+                         self.delete_region_button
                         )
         if len(self.project.pages) > 0:
             self.set_enabled(True, self.align_page_action)
             self.set_enabled(True, self.manual_align_page_action)
             self.set_enabled(True, self.align_all_pages_action)
+            self.set_enabled(True, self.dewarp_page_action)
+            self.set_enabled(True, self.reread_page_action)
             if len(self.current_page.sub_regions) > 0:
                 self.set_enabled(True,
                                 self.region_algo_select,

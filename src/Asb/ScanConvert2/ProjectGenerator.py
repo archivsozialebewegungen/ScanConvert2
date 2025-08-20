@@ -72,6 +72,13 @@ class PagesGenerator(object):
             270: 90,
         }
     
+    def reread_single_scan(self, scans: [], scan_no: int, scan_rotation: int, alternating: bool):
+        
+        if alternating:
+            if scan_no % 2 == 1:
+                scan_rotation = self.rotation_alternating[scan_rotation]
+        return self.scans_to_pages([scans[scan_no]], scan_rotation, alternating)
+        
     def scans_to_pages(self, scans: [], scan_rotation: int, alternating: bool):
 
         if scan_rotation == 0:
@@ -250,7 +257,31 @@ class ProjectGenerator():
         self.number_of_pages_detector = number_of_pages_detector
         self.page_generator = page_generator
         self.page_sorter = page_sorter
-    
+        
+    def reread_single_scan(self, project: Project, scan: Scan) -> Project:
+ 
+        scan_no = project.scans.index(scan)
+        
+        # reread scan file and create new scan object
+        scan = project.scans[scan_no]
+        new_scan = Scan(scan.filename)
+        new_scan.no_of_pages = scan.no_of_pages
+        project.scans[scan_no] = new_scan
+        
+        # determine the pages of the scan again
+        new_pages = self.page_generator.reread_single_scan(
+                      project.scans, scan_no, project.project_properties.scan_rotation,
+                      project.project_properties.rotation_alternating)
+        while len(new_pages) > 0: 
+            new_page = new_pages.pop(0)
+            for page in project.pages:
+                if new_page.scan.filename == page.scan.filename and new_page.scan_part == page.scan_part: 
+                    page.scan = scan
+                    page.main_region = page.initial_main_region = new_page.main_region
+                    assert(page.rotation_angle == new_page.rotation_angle)
+                  
+        return project
+             
     def scans_to_project(self,
                     scans: [],
                     pages_per_scan: int,

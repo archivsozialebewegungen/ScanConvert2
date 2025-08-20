@@ -24,7 +24,7 @@ from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord,\
     OCR_PICTURE_MODE_RAW, OCR_PICTURE_MODE_MANUAL, OCR_PICTURE_MODE_OTSU
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
-    DDFFileType, ScanPart, PdfMode
+    DDFFileType, ScanPart, PdfMode, Scan
 from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
@@ -1014,6 +1014,10 @@ class ProjectService(object):
                     sort_type,
                     scan_rotation,
                     rotation_alternating)
+        
+    def reread_scan(self, project: Project, scan: Scan) -> Project:
+        
+        return self.project_generator.reread_single_scan(project, scan)
         
     def save_project(self, file_name: str, project: Project):
         
