@@ -18,6 +18,7 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
+
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper
 from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord,\
@@ -978,7 +979,6 @@ class DDFService(ExportService, XMLGenerator):
         new_img = Image.new(img.mode, (new_width, new_height), ImageColor.getcolor("black", img.mode))
         new_img.paste(img, (int(additional_pixels / 2), int(additional_pixels / 2)))
         return new_img
-
 
 @singleton    
 class ProjectService(object):

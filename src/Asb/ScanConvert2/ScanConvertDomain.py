@@ -11,6 +11,7 @@ from Asb.ScanConvert2.Algorithms import Algorithm
 import os
 import re
 from Asb.ScanConvert2.CroppingService import CroppingInformation
+from py_reform.core import straighten
 
 class Mode(Enum):
     
@@ -353,6 +354,8 @@ class Page:
         self.sub_regions = []
         self.skip_page = False
         self.current_sub_region_no = 0
+        self.dewarp = False
+
  
     def set_first_as_current_region(self):
         
@@ -402,6 +405,8 @@ class Page:
             img = img.convert("RGB")
         if self.final_rotation_angle != 0:
             img = self._rotate_image(img, self.final_rotation_angle)
+        if self.dewarp:
+            img = straighten(img)
         img = self.align_image(img)
         img.info['dpi'] = (self.scan.resolution, self.scan.resolution)
         return img

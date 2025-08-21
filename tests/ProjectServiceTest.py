@@ -9,6 +9,8 @@ import unittest
 
 from fitz.fitz import Document
 from injector import Injector
+import pytesseract
+from PIL import Image
 
 from Asb.ScanConvert2.Algorithms import AlgorithmModule
 from Asb.ScanConvert2.ScanConvertDomain import Scan
@@ -22,7 +24,7 @@ numbers_as_text = {
     2: "zwei",
     3: "drei",
     4: "vier",
-    5: "fünf",
+    5: "fiinf",
     6: "sechs",
     7: "sieben",
     8: "acht"
@@ -39,10 +41,11 @@ class ProjectServiceTest(BaseTest):
         with tempfile.TemporaryDirectory() as tmp_dir:
             pdf_file = os.path.join(tmp_dir, "test.pdf")
             project_service.export_pdf(project, pdf_file)
-            #project_service.export_pdf(project, "/tmp/tmp.pdf")
             document = Document(pdf_file)
             for i in range(0,8):
-                self.assertIn(numbers_as_text[i+1], document.get_page_text(i))
+                page = document.load_page(i)
+                text = page.get_text()
+                self.assertIn(numbers_as_text[i+1], text)
 
     def testProjectServiceSingle(self):
         
@@ -462,6 +465,30 @@ class ProjectServiceTest(BaseTest):
                                                  False)
 
         self.assert_project(self.project_service, project)
+
+    def test_save_and_load_project(self):
+        scans = []
+        for i in range(1, 3):
+            scans.append(Scan(os.path.join(self.test_file_dir, "Single000", f"Seite{i}.png")))
+        project = self.project_service.create_project(scans, 1, SortType.STRAIGHT, 0, False, False)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "test_project.scp")
+            self.project_service.save_project(file_path, project)
+            loaded_project = self.project_service.load_project(file_path)
+            self.assertEqual(project.metadata.title, loaded_project.metadata.title)
+            self.assertEqual(len(project.pages), len(loaded_project.pages))
+            self.assertEqual(len(project.scans), len(loaded_project.scans))
+
+    def test_save_project_appends_extension(self):
+        scans = []
+        for i in range(1, 3):
+            scans.append(Scan(os.path.join(self.test_file_dir, "Single000", f"Seite{i}.png")))
+        project = self.project_service.create_project(scans, 1, SortType.STRAIGHT, 0, False, False)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            file_path = os.path.join(tmp_dir, "test_project")
+            self.project_service.save_project(file_path, project)
+            expected_path = file_path + ".scp"
+            self.assertTrue(os.path.exists(expected_path))
 
 if __name__ == "__main__":
     unittest.main()

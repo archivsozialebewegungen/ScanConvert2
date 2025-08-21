@@ -39,6 +39,8 @@ CROP_REGION = "Freistellen"
 UNCROP_REGION = "Freistellung aufheben"
 CROP_ALL_REGION = "Alle Freistellen"
 UNCROP_ALL_REGION = "Alle Freistellungen aufheben"
+TEXT_DEWARP = "Text &Geradeziehen"
+TEXT_REWARP = "&Geradeziehen aufheben"
 REGION_SELECT_MODE = True
 
 Image.MAX_IMAGE_PIXELS = None 
@@ -118,7 +120,7 @@ class BaseWindow(QMainWindow):
         self.align_all_pages_action.setShortcut('Ctrl+R')
         self.align_all_pages_action.setStatusTip('Alle Seiten ausrichten')
 
-        self.dewarp_page_action = QAction(QIcon('any.png'), 'Text &Glätten', self)
+        self.dewarp_page_action = QAction(QIcon('any.png'), TEXT_DEWARP, self)
         self.dewarp_page_action.setShortcut('Ctrl+G')
         self.dewarp_page_action.setStatusTip('Text glätten')
 
@@ -498,7 +500,8 @@ class Window(BaseWindow):
         
     def cb_dewarp_page(self):
         
-        pass
+        self.project.current_page.dewarp = not self.project.current_page.dewarp
+        self.update_gui()
         
     def cb_align_all_pages(self):
         
@@ -872,6 +875,11 @@ class Window(BaseWindow):
                 self.align_page_action.setText("Seite &ausrichten")
             else:
                 self.align_page_action.setText("&Ausrichten aufheben")
+
+            if self.project.current_page.dewarp:
+                self.dewarp_page_action.setText(TEXT_REWARP)
+            else:
+                self.dewarp_page_action.setText(TEXT_DEWARP)
 
             try:
                 self.show_page_counter(self.project.current_page_no, len(self.project.pages))
