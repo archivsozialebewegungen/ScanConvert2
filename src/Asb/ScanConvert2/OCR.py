@@ -98,7 +98,7 @@ class OcrRunner(object):
         '''
 
         alto = pytesseract.image_to_alto_xml(img, lang=lang)
-        return ET.fromstring(alto)
+        return ET.ElementTree(ET.fromstring(alto))
     
     def _parse_dom(self, root: ET.Element, page: OCRPage):
 

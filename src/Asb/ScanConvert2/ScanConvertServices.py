@@ -18,6 +18,8 @@ from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
+import xml.etree.ElementTree as ET
+
 
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper
@@ -883,20 +885,19 @@ class DDFService(ExportService, XMLGenerator):
     def _write_alto_file(self, img, file_name, ocr_lang):
         
         alto_dom = self.ocr_runner.run_tesseract_for_alto(img, ocr_lang)
-        alto_dom.write(file_name)
+        with open(file_name, "wb") as file: 
+            alto_dom.write(file, encoding='utf-8')
 
     def _join_alto_files(self, projectfiles, file_name):
         
         id_re = re.compile(r'ID="([a-z]+)_')
         
-        output = open(file_name, "w")
-        
         alto_files = self._fetch_page_alto_files(projectfiles)
         with open(alto_files[0], 'r') as file:
             alto1_as_string = file.read()
-            main_dom = parseString(re.sub(id_re, r'ID="\1_1_', alto1_as_string))
+            main_dom = ET.ElementTree(ET.fromstring(re.sub(id_re, r'ID="\1_1_', alto1_as_string)))
         
-        layouts = main_dom.getElementsByTagName("Layout")
+        layouts = main_dom.findall('.//{*}Layout')
         layout = layouts[0]
         
         counter = 1
@@ -904,12 +905,12 @@ class DDFService(ExportService, XMLGenerator):
             counter += 1
             with open(alto_file, 'r') as file:
                 alto_as_string = file.read()
-                dom = parseString(re.sub(id_re, r'ID="\1_%d_' % counter, alto_as_string))
-            pages = dom.getElementsByTagName("Page")
-            layout.childNodes.append(pages[0])
-        
-        output.write(main_dom.toprettyxml())
-        output.close()
+                dom = ET.ElementTree(ET.fromstring(re.sub(id_re, r'ID="\1_%d_' % counter, alto_as_string)))
+            for page in dom.findall('.//{*}Page'):
+                layout.append(page)
+
+        with open(file_name, "wb") as output:
+            main_dom.write(output, encoding="utf-8")
         
         return file_name
         
@@ -925,7 +926,7 @@ class DDFService(ExportService, XMLGenerator):
         
         pdf_name = project.metadata.ddf_prefix + "00001.pdf"
         output_name = os.path.join(tempdir, pdf_name)
-        self.pdf_service.create_pdf_file(project, output_name, stupid_ddf_pdf=True)
+        self.pdf_service.create_pdf_file(project, output_name)
         
         return DDFFile(DDFFileType.PDF, 1, output_name)
     
