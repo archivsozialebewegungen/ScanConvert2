@@ -10,7 +10,7 @@ import tempfile
 
 from PIL import Image
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QGuiApplication
 from PySide6.QtWidgets import \
     QVBoxLayout, QLabel, QPushButton, QHBoxLayout, \
     QMainWindow, \
@@ -28,7 +28,7 @@ from Asb.ScanConvert2.ScanConvertDomain import Project, \
     Page, NoPagesInProjectException, \
     NoRegionsOnPageException, MetaData
 from Asb.ScanConvert2.ScanConvertServices import ProjectService, \
-    FinishingService
+    FinishingService, OCRService
 from Asb.ScanConvert2.AngleCorrection import AngleCorrectionService, DeskewService
 
 CREATE_REGION = "Region anlegen"
@@ -39,6 +39,7 @@ CROP_REGION = "Freistellen"
 UNCROP_REGION = "Freistellung aufheben"
 CROP_ALL_REGION = "Alle Freistellen"
 UNCROP_ALL_REGION = "Alle Freistellungen aufheben"
+COPY_TEXT = "Text kopieren"
 TEXT_DEWARP = "Text &Geradeziehen"
 TEXT_REWARP = "&Geradeziehen aufheben"
 REGION_SELECT_MODE = True
@@ -297,10 +298,14 @@ class BaseWindow(QMainWindow):
         self.delete_region_button = QPushButton()
         self.crop_region_button = QPushButton()
         self.crop_all_region_button = QPushButton()
+        self.copy_text_button = QPushButton()
+        self.copy_text_button.setText(COPY_TEXT)
+
         page_view_buttons_layout.addWidget(self.new_region_button)
         page_view_buttons_layout.addWidget(self.delete_region_button)
         page_view_buttons_layout.addWidget(self.crop_region_button)
         page_view_buttons_layout.addWidget(self.crop_all_region_button)
+        page_view_buttons_layout.addWidget(self.copy_text_button)
         right_panel_layout.addLayout(page_view_buttons_layout)
         self.graphics_view = PageView()
         right_panel_layout.addWidget(self.graphics_view)
@@ -358,6 +363,7 @@ class Window(BaseWindow):
                  project_service: ProjectService,
                  angle_correction_service: AngleCorrectionService,
                  deskew_service: DeskewService,
+                 ocr_service: OCRService,
                  task_manager: TaskManager,
                  previewer: FehPreviewer):
 
@@ -368,6 +374,7 @@ class Window(BaseWindow):
         self.project_service = project_service
         self.angle_correction_service = angle_correction_service
         self.deskew_service = deskew_service
+        self.ocr_service = ocr_service
         self.task_manager = task_manager
         self.task_manager.message_function = self.show_job_status
         self.previewer = previewer
@@ -433,6 +440,7 @@ class Window(BaseWindow):
         self.delete_region_button.clicked.connect(self.cb_delete_cancel_region)
         self.crop_region_button.clicked.connect(self.cb_crop_uncrop_region)
         self.crop_all_region_button.clicked.connect(self.cb_crop_uncrop_all_region)
+        self.copy_text_button.clicked.connect(self.cb_copy_text)
 
     def cb_new_project(self):
         
@@ -756,6 +764,17 @@ class Window(BaseWindow):
         
         self.update_gui()
 
+    def cb_copy_text(self):
+    
+        
+        img = self.current_page.get_region_image(region = self.graphics_view.get_selected_region())
+        #img.show()
+        text = self.ocr_service.get_image_text(img, self.project.project_properties.ocr_lang)
+        QGuiApplication.clipboard().setText(text)
+        self.region_mode = not REGION_SELECT_MODE
+        
+        self.update_gui()
+
     def cb_crop_uncrop_all_region(self):
     
         if self.region_mode == REGION_SELECT_MODE:
@@ -769,7 +788,6 @@ class Window(BaseWindow):
         
     def _crop_region(self):
         
-        self.graphics_view.get_selected_region()
         self.current_page.crop_page(self.graphics_view.get_selected_region())
         self.graphics_view.reset_rubberband()
         
@@ -856,7 +874,7 @@ class Window(BaseWindow):
                         self.rotate_180, self.rotate_270, self.previous_region_button,
                         self.next_region_button, self.region_algo_select,
                         self.new_region_button, self.delete_region_button,
-                        self.crop_region_button, self.crop_all_region_button
+                        self.crop_region_button, self.crop_all_region_button, self.copy_text_button
                         )
         self.set_enabled(True,
                         self.new_project_action, self.exit_action,
@@ -932,7 +950,7 @@ class Window(BaseWindow):
                         )
         self.set_enabled(True,
                         self.new_region_button, self.delete_region_button, self.crop_region_button,
-                        self.crop_all_region_button
+                        self.crop_all_region_button, self.copy_text_button
                         )
         
         
@@ -954,7 +972,7 @@ class Window(BaseWindow):
                          self.dewarp_page_action, self.reread_page_action,
                          self.previous_page_button, self.next_page_button,
                          self.crop_region_button, self.crop_all_region_button,
-                         self.previous_region_button,
+                         self.copy_text_button, self.previous_region_button,
                          self.next_region_button, self.region_algo_select,
                          self.delete_region_button
                         )

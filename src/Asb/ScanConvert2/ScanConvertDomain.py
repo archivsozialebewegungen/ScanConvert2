@@ -425,7 +425,13 @@ class Page:
     def crop_page(self, region: Region):
         # TODO: Rotation angle berücksichtigen
         
-        self.main_region = self._calculate_crop_region(region, self.final_rotation_angle)
+        self.main_region = self._calculate_selected_region(region, self.final_rotation_angle)
+        
+    def get_region_image(self, region: Region):
+        
+        region = self._calculate_selected_region(region, self.final_rotation_angle)
+        scan_region_image = self.scan.get_raw_image().crop((region.x, region.y, region.x2, region.y2))
+        return self._rotate_image(scan_region_image, self.final_rotation_angle)
 
     def uncrop_page(self):
         
@@ -435,7 +441,7 @@ class Page:
         
         return self.main_region != self.initial_main_region
                 
-    def _calculate_crop_region(self, region: Region, final_rotation_angle: int):
+    def _calculate_selected_region(self, region: Region, final_rotation_angle: int):
         
         if final_rotation_angle == 0:
             return Region(self.main_region.x + region.x,
@@ -444,11 +450,6 @@ class Page:
                           region.height)
         
         if final_rotation_angle == 90:
-
-        #    return Region(region.y,
-        #                  self.main_region.height - region.width - region.x,
-        #                  region.height,
-        #                  region.width)
 
             return Region(self.main_region.x + region.y,
                           self.main_region.y + self.main_region.height - region.width - region.x,

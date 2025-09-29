@@ -310,6 +310,10 @@ class OCRService(object):
     def __init__(self, ocr_runner: OcrRunner):
         
         self.ocr_runner = ocr_runner
+        
+    def get_image_text(self, img: Image, lang: str):
+        
+        return self.ocr_runner.run_tesseract_for_string(img, lang)
     
     def add_ocrresult_to_pdf(self, img: Image, pdf: Canvas, lang: str) -> Canvas:
         

@@ -100,6 +100,10 @@ class OcrRunner(object):
         alto = pytesseract.image_to_alto_xml(img, lang=lang)
         return ET.ElementTree(ET.fromstring(alto))
     
+    def run_tesseract_for_string(self, img: Image, lang: str) -> str:
+        
+        return pytesseract.image_to_string(img, lang=lang)
+    
     def _parse_dom(self, root: ET.Element, page: OCRPage):
 
         for paragraph in root.findall("p"):
