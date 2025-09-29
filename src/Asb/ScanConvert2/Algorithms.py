@@ -12,7 +12,7 @@ Created on 18.01.2023
 '''
 from enum import Enum
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageEnhance
 import cv2
 from injector import Module, BoundKey, provider, singleton
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
@@ -20,7 +20,7 @@ from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
 
 import numpy as np
 from PIL.ImageOps import invert
-from operator import itemgetter
+
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -53,6 +53,7 @@ class Algorithm(Enum):
     INVERT=14
     BLACK_AND_COLOR_ON_WHITE=15
     THREE_COLORS_ON_WHITE=16
+    DENOISE=17
 
     
     def __str__(self):
@@ -72,7 +73,8 @@ class Algorithm(Enum):
             Algorithm.FOUR_COLORS: "Vier Farben",
             Algorithm.INVERT: "Invertieren",
             Algorithm.BLACK_AND_COLOR_ON_WHITE: "Schwarzer Text mit Farbe",
-            Algorithm.THREE_COLORS_ON_WHITE: "Drei Farben auf weiß"
+            Algorithm.THREE_COLORS_ON_WHITE: "Drei Farben auf weiß",
+            Algorithm.DENOISE: "Rauschen entfernen"
         }
     
         return texts[self]
@@ -529,6 +531,22 @@ class InvertAlgorithm(ModeTransformationAlgorithm):
 
         return (invert(img), None)
     
+class DenoiseAlgorithm():
+    
+    def transform(self, img: Image, bg_color) -> Image:
+
+        # In Graustufen umwandeln
+        gray_image = img.convert("L")
+
+        # Kontrast erhöhen
+        enhancer = ImageEnhance.Contrast(gray_image)
+        contrasted_image = enhancer.enhance(2.0)  # Kontrastfaktor
+
+        # Rauschen reduzieren mit Medianfilter
+        denoised_image = contrasted_image.filter(ImageFilter.MedianFilter(size=3))
+
+        return (denoised_image, None)
+    
 class AlgorithmModule(Module):
     """
     This is the injector module
@@ -553,4 +571,5 @@ class AlgorithmModule(Module):
                 Algorithm.STENCIL_PRINT_BAD: BadStencilPrint(),
                 Algorithm.ERASE: Erase(),
                 Algorithm.INVERT: InvertAlgorithm(),
-                Algorithm.THREE_COLORS_ON_WHITE: ThreeColorsOnWhite()}
+                Algorithm.THREE_COLORS_ON_WHITE: ThreeColorsOnWhite(),
+                Algorithm.DENOISE: DenoiseAlgorithm()}
