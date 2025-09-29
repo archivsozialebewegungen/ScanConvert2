@@ -431,6 +431,7 @@ class Page:
         
         region = self._calculate_selected_region(region, self.final_rotation_angle)
         scan_region_image = self.scan.get_raw_image().crop((region.x, region.y, region.x2, region.y2))
+        print(self.final_rotation_angle)
         return self._rotate_image(scan_region_image, self.final_rotation_angle)
 
     def uncrop_page(self):
@@ -481,6 +482,8 @@ class Page:
             return img.transpose(Image.ROTATE_180)
         if angle == 90:
             return img.transpose(Image.ROTATE_270)
+        if angle == 0:
+            return img
         raise IllegalRotationAngle()
 
     def _apply_algorithm(self, img: Image, algorithm: int) -> Image:
