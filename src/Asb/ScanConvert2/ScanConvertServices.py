@@ -23,16 +23,14 @@ import xml.etree.ElementTree as ET
 
 from Asb.ScanConvert2.Algorithms import AlgorithmImplementations, Algorithm, \
     AlgorithmHelper
-from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord,\
-    OCR_PICTURE_MODE_RAW, OCR_PICTURE_MODE_MANUAL, OCR_PICTURE_MODE_OTSU
+from Asb.ScanConvert2.OCR import OcrRunner, OCRLine, OCRPage, OCRWord
 from Asb.ScanConvert2.ProjectGenerator import ProjectGenerator, SortType
 from Asb.ScanConvert2.ScanConvertDomain import Project, Page, Region, DDFFile,\
     DDFFileType, ScanPart, PdfMode, Scan
-from fitz.fitz import Document as PdfDocument
 from exiftool.helper import ExifToolHelper
 from Asb.ScanConvert2.CroppingService import CroppingService
 # TODO: Replace minidom with ElementTree
-from xml.dom.minidom import parseString, Document
+from xml.dom.minidom import Document
 import re
 
 INVISIBLE = 3
