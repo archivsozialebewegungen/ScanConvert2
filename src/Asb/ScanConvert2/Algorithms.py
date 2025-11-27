@@ -14,7 +14,7 @@ from enum import Enum
 
 from PIL import Image, ImageFilter, ImageEnhance
 import cv2
-from injector import Module, BoundKey, provider, singleton
+from injector import Module, BoundKey, provider, singleton, inject
 from skimage.filters.thresholding import threshold_otsu, threshold_sauvola, \
     threshold_niblack
 
@@ -54,6 +54,7 @@ class Algorithm(Enum):
     BLACK_AND_COLOR_ON_WHITE=15
     THREE_COLORS_ON_WHITE=16
     DENOISE=17
+    BAD_CONTRAST=18
 
     
     def __str__(self):
@@ -74,6 +75,7 @@ class Algorithm(Enum):
             Algorithm.INVERT: "Invertieren",
             Algorithm.BLACK_AND_COLOR_ON_WHITE: "Schwarzer Text mit Farbe",
             Algorithm.THREE_COLORS_ON_WHITE: "Drei Farben auf weiß",
+            Algorithm.BAD_CONTRAST: "Schlechter Kontrast",
             Algorithm.DENOISE: "Rauschen entfernen"
         }
     
@@ -547,6 +549,45 @@ class DenoiseAlgorithm():
 
         return (denoised_image, None)
     
+class BadContrastAlgorithm():
+    
+    def transform(self, pil_img: Image, bg_color) -> Image:
+        
+        img = np.array(pil_img)
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR) 
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+        # --- LAB Farbraum ---
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        L, _A, _B = cv2.split(lab)
+
+        # --- Hintergrundschätzung ---
+        background = cv2.GaussianBlur(L, (51, 51), 0)
+
+        # --- Hintergrund entfernen ---
+        diff = cv2.subtract(background, L)
+        norm = cv2.normalize(diff, None, 0, 255, cv2.NORM_MINMAX)
+
+        # --- Adaptive Binärisierung ---
+        binary = cv2.adaptiveThreshold(
+            norm,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31,
+            -10
+        )
+
+        # --- Invertieren (damit Text schwarz, Hintergrund weiß) ---
+        binary_inv = 255 - binary
+
+        # --- Ergebnis als PIL (grau) ---
+        pil_out = Image.fromarray(binary_inv)
+
+        return pil_out, bg_color
+    
 class AlgorithmModule(Module):
     """
     This is the injector module
@@ -572,4 +613,5 @@ class AlgorithmModule(Module):
                 Algorithm.ERASE: Erase(),
                 Algorithm.INVERT: InvertAlgorithm(),
                 Algorithm.THREE_COLORS_ON_WHITE: ThreeColorsOnWhite(),
+                Algorithm.BAD_CONTRAST: BadContrastAlgorithm(),
                 Algorithm.DENOISE: DenoiseAlgorithm()}
