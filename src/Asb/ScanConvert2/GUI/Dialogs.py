@@ -3,14 +3,13 @@ Created on 09.01.2023
 
 @author: michael
 '''
-from PySide6.QtCore import QRect
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QVBoxLayout, \
     QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit, QCheckBox, QComboBox,\
     QDoubleSpinBox
 import pytesseract
 
 from Asb.ScanConvert2.ScanConvertDomain import MetaData, ProjectProperties,\
-    PdfMode, Page
+    PdfMode
 
 
 class MetadataDialog(QDialog):

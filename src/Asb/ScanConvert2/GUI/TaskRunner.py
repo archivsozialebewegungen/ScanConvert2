@@ -13,7 +13,6 @@ import traceback
 from injector import singleton, inject
 
 from Asb.ScanConvert2.PictureDetector import PictureDetector
-from Asb.ScanConvert2.ScanConvertDomain import Project
 from Asb.ScanConvert2.ScanConvertServices import ProjectService
 from PySide6.QtCore import QThread
 

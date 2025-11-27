@@ -614,7 +614,7 @@ class Project(object):
         
         if len(self.pages) == 0:
             return "unknown.%s" % suffix
-        return re.sub("[-_]?\d*\.[^\.]+?$", ".%s" % suffix, self.pages[0].scan.filename)
+        return re.sub(r"[-_]?\d*\.[^\.]+?$", ".%s" % suffix, self.pages[0].scan.filename)
         
         
     
